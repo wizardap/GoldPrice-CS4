@@ -5,7 +5,7 @@ import './App.css';
 const socket = io('http://localhost:4000');
 
 function App() {
-  const keyID = location.pathname.split("/")[2];
+  const keyID = location.pathname.split("/")[location.pathname.split("/").length - 1];
   const [loading, setLoading] = useState(true);
   const [valid, setValid] = useState(true);
   const [value, setValue] = useState("");
@@ -43,6 +43,14 @@ function App() {
 
   return (
     <>
+    {/* // createa a nav bar with 3 option SJC,PNJ, DOJI */}
+      <nav>
+        <ul>
+          <li><a href="SJC">SJC</a></li>
+          <li><a href="PNJ">PNJ</a></li>
+          <li><a href="DOJI">DOJI</a></li>
+        </ul>
+      </nav>
       {valid ? (
         <div>
           Value of {keyID}: {loading ? "Loading..." : value}

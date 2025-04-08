@@ -24,7 +24,7 @@ yarn-error.log*
 # Build output
 dist/
 build/
-
+db/
 # Dependency directories
 jspm_packages/
 

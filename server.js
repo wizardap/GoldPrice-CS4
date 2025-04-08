@@ -14,7 +14,7 @@ app.use(cors());
 
 const kafka = new Kafka({
     clientId: 'ad7X_MVgRQ6F_fxqCRw0Vg',
-    brokers: ['localhost:9092']
+    brokers: ['kafka:9092']
 });
 const producer = kafka.producer();
 app.post('/add', async (req, res) => {

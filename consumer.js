@@ -12,7 +12,7 @@ const io = new Server(server,{
     },
 });
 
-const kafka = new Kafka({ clientId: "ad7X_MVgRQ6F_fxqCRw0Vg", brokers: ["localhost:9092"] });
+const kafka = new Kafka({ clientId: "ad7X_MVgRQ6F_fxqCRw0Vg", brokers: ["kafka:9092"] });
 const consumer = kafka.consumer({ groupId: "ws-group" });
 
 const run = async () => {
