@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gold Price Viewer</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #price { font-size: 24px; }
+    </style>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <h1>Gold Price Viewer</h1>
+    <div id="price">Loading...</div>
+    <script>
+        const socket = io();
+        const urlParams = new URLSearchParams(window.location.search);
+        const keyID = urlParams.get('keyID') || 'gold_price';
+        socket.on('connect', () => socket.emit('subscribe', keyID));
+        socket.on('priceUpdate', (data) => {
+            if (data.keyID === keyID) {
+                document.getElementById('price').innerText = `Current Price: ${data.value} USD/ounce`;
+            }
+        });
+    </script>
+</body>
+</html>

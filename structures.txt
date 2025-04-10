@@ -1,0 +1,26 @@
+gold-price-app/
+├── producer/               # Dịch vụ Producer
+│   ├── config/             # Cấu hình cho Producer
+│   │   ├── db.js          # Cấu hình kết nối database
+│   │   └── kafka.js       # Cấu hình kết nối Kafka
+│   ├── services/           # Logic nghiệp vụ của Producer
+│   │   └── goldPriceService.js  # Logic tạo và gửi dữ liệu giá vàng
+│   ├── Dockerfile          # File build container cho Producer
+│   ├── package.json        # Dependencies và scripts
+│   └── server.js           # File chính khởi động Producer
+├── consumer/               # Dịch vụ Consumer
+│   ├── config/             # Cấu hình cho Consumer
+│   │   ├── db.js          # Cấu hình kết nối database
+│   │   └── kafka.js       # Cấu hình kết nối Kafka
+│   ├── public/             # Tài nguyên tĩnh (giao diện)
+│   │   └── viewer.html    # File HTML để hiển thị giá vàng
+│   ├── routes/             # API routes cho Consumer
+│   │   └── api.js         # Định nghĩa các endpoint API
+│   ├── services/           # Logic nghiệp vụ của Consumer
+│   │   └── socketService.js  # Logic lắng nghe Kafka và phát qua Socket.io
+│   ├── Dockerfile          # File build container cho Consumer
+│   ├── package.json        # Dependencies và scripts
+│   └── server.js           # File chính khởi động Consumer
+├── .gitignore              # Loại bỏ file không cần commit
+├── docker-compose.yml      # Định nghĩa các dịch vụ và mạng
+└── README.md               # Hướng dẫn cài đặt và sử dụng

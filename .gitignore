@@ -51,4 +51,7 @@ coverage/
 
 
 #Temporary sample data
-db/
+db/*
+
+
+
