@@ -1,11 +1,14 @@
 const GoldPrice = require('../models/GoldPrice');
 
-function write(key, value) {
+function write(key, data) {
     return new Promise(async (resolve, reject) => {
         try {
             const result = await GoldPrice.findOneAndUpdate(
                 { keyID: key },
-                { value, timestamp: new Date() },
+                {
+                    brands: data.brands,
+                    timestamp: new Date()
+                },
                 { upsert: true, new: true }
             );
             resolve(result._id);
@@ -19,7 +22,7 @@ function view(key) {
     return new Promise(async (resolve, reject) => {
         try {
             const result = await GoldPrice.findOne({ keyID: key });
-            resolve(result ? result.value : null);
+            resolve(result);
         } catch (error) {
             reject(error.message);
         }

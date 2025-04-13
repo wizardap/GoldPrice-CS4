@@ -2,32 +2,35 @@ const express = require('express');
 const router = express.Router();
 const goldPriceRepository = require('../repositories/goldPriceRepository');
 const messageBrokerService = require('../services/messageBrokerService');
+const { validateGoldPriceData } = require('../middleware/validation'); // Thêm dòng này
 
-router.post('/add', async (req, res) => {
-    const { keyID, value } = req.body;
+// Áp dụng middleware validation
+router.post('/add', validateGoldPriceData, async (req, res, next) => {
+    const { keyID, data } = req.body;
     try {
-        await goldPriceRepository.save(keyID, value);
+        await goldPriceRepository.save(keyID, data);
         await messageBrokerService.publishMessage({
             keyID,
-            value,
+            data,
             timestamp: new Date()
         });
-        res.json({ keyID, value });
+        res.json({ keyID, data });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        next(error);
     }
 });
 
-router.get('/get/:keyID', async (req, res) => {
+// Phần còn lại giữ nguyên
+router.get('/get/:keyID', async (req, res, next) => {
     try {
-        const value = await goldPriceRepository.findByKey(req.params.keyID);
-        if (value !== null) {
-            res.json({ keyID: req.params.keyID, value });
+        const result = await goldPriceRepository.findByKey(req.params.keyID);
+        if (result !== null) {
+            res.json(result);
         } else {
             res.status(404).json({ message: 'Key ID not found' });
         }
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        next(error);
     }
 });
 

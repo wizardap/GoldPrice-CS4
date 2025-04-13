@@ -1,11 +1,14 @@
 const GoldPrice = require('../models/GoldPrice');
 
 class GoldPriceRepository {
-    async save(key, value) {
+    async save(key, data) {
         try {
             const result = await GoldPrice.findOneAndUpdate(
                 { keyID: key },
-                { value, timestamp: new Date() },
+                {
+                    brands: data.brands,
+                    timestamp: new Date()
+                },
                 { upsert: true, new: true }
             );
             return result._id;
@@ -17,7 +20,7 @@ class GoldPriceRepository {
     async findByKey(key) {
         try {
             const result = await GoldPrice.findOne({ keyID: key });
-            return result ? result.value : null;
+            return result;
         } catch (error) {
             throw new Error(`Failed to find gold price: ${error.message}`);
         }

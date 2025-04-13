@@ -1,26 +1,190 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Gold Price Viewer</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        #price { font-size: 24px; }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .brand-container {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .brand-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            border-bottom: 2px solid #e6a112;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .items-table th,
+        .items-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .items-table th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+
+        .buy-price {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        .sell-price {
+            color: #f44336;
+            font-weight: bold;
+        }
+
+        .updated-time {
+            font-size: 12px;
+            color: #777;
+            text-align: right;
+            margin-top: 10px;
+        }
     </style>
     <script src="/socket.io/socket.io.js"></script>
 </head>
+
 <body>
-    <h1>Gold Price Viewer</h1>
-    <div id="price">Loading...</div>
+    <div class="container">
+        <h1>Gold Price Monitor</h1>
+        <div id="content">Loading...</div>
+    </div>
     <script>
         const socket = io();
         const urlParams = new URLSearchParams(window.location.search);
         const keyID = urlParams.get('keyID') || 'gold_price';
+        let lastUpdate = new Date();
+
         socket.on('connect', () => socket.emit('subscribe', keyID));
+
         socket.on('priceUpdate', (data) => {
-            if (data.keyID === keyID) {
-                document.getElementById('price').innerText = `Current Price: ${data.value} USD/ounce`;
+            if (data.keyID === keyID && data.data && data.data.brands) {
+                lastUpdate = new Date(data.timestamp);
+                updateUI(data.data.brands);
             }
         });
+
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('vi-VN', {
+                style: 'currency',
+                currency: 'VND',
+                maximumFractionDigits: 0
+            }).format(value);
+        }
+
+        function updateUI(brands) {
+            const contentElement = document.getElementById('content');
+            contentElement.innerHTML = '';
+
+            brands.forEach(brand => {
+                const brandElement = document.createElement('div');
+                brandElement.className = 'brand-container';
+
+                const brandNameElement = document.createElement('div');
+                brandNameElement.className = 'brand-name';
+                brandNameElement.textContent = brand.name;
+                brandElement.appendChild(brandNameElement);
+
+                if (brand.items && brand.items.length > 0) {
+                    const table = document.createElement('table');
+                    table.className = 'items-table';
+
+                    // Table header
+                    const thead = document.createElement('thead');
+                    const headerRow = document.createElement('tr');
+                    ['Loại', 'Giá mua', 'Giá bán'].forEach(text => {
+                        const th = document.createElement('th');
+                        th.textContent = text;
+                        headerRow.appendChild(th);
+                    });
+                    thead.appendChild(headerRow);
+                    table.appendChild(thead);
+
+                    // Table body
+                    const tbody = document.createElement('tbody');
+                    brand.items.forEach(item => {
+                        const row = document.createElement('tr');
+
+                        const typeCell = document.createElement('td');
+                        typeCell.textContent = item.type;
+                        row.appendChild(typeCell);
+
+                        const buyCell = document.createElement('td');
+                        buyCell.className = 'buy-price';
+                        buyCell.textContent = formatCurrency(item.buy);
+                        row.appendChild(buyCell);
+
+                        const sellCell = document.createElement('td');
+                        sellCell.className = 'sell-price';
+                        sellCell.textContent = formatCurrency(item.sell);
+                        row.appendChild(sellCell);
+
+                        tbody.appendChild(row);
+                    });
+                    table.appendChild(tbody);
+                    brandElement.appendChild(table);
+                } else {
+                    const noItems = document.createElement('p');
+                    noItems.textContent = 'Không có dữ liệu';
+                    brandElement.appendChild(noItems);
+                }
+
+                // Add last update time
+                const updateTimeElement = document.createElement('div');
+                updateTimeElement.className = 'updated-time';
+                updateTimeElement.textContent = `Cập nhật lần cuối: ${lastUpdate.toLocaleString()}`;
+                brandElement.appendChild(updateTimeElement);
+
+                contentElement.appendChild(brandElement);
+            });
+        }
+
+        // Fetch initial data
+        fetch(`/api/get/${keyID}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.brands) {
+                    lastUpdate = new Date(data.timestamp);
+                    updateUI(data.brands);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching initial data:', error);
+                document.getElementById('content').innerHTML =
+                    '<div class="brand-container">Không thể tải dữ liệu giá vàng</div>';
+            });
     </script>
 </body>
+
 </html>
