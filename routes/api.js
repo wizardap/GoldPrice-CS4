@@ -1,16 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const { write, view } = require('../utils/utils');
-const { producer } = require('../config/kafka');
+const goldPriceRepository = require('../repositories/goldPriceRepository');
+const messageBrokerService = require('../services/messageBrokerService');
 
 router.post('/add', async (req, res) => {
     const { keyID, value } = req.body;
     try {
-        await write(keyID, value);
-        const message = JSON.stringify({ keyID, value, timestamp: new Date() });
-        await producer.send({
-            topic: 'gold-price-updates',
-            messages: [{ value: message }]
+        await goldPriceRepository.save(keyID, value);
+        await messageBrokerService.publishMessage({
+            keyID,
+            value,
+            timestamp: new Date()
         });
         res.json({ keyID, value });
     } catch (error) {
@@ -20,7 +20,7 @@ router.post('/add', async (req, res) => {
 
 router.get('/get/:keyID', async (req, res) => {
     try {
-        const value = await view(req.params.keyID);
+        const value = await goldPriceRepository.findByKey(req.params.keyID);
         if (value !== null) {
             res.json({ keyID: req.params.keyID, value });
         } else {

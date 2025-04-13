@@ -6,6 +6,8 @@ services:
       - "2181:2181"
     environment:
       - ALLOW_ANONYMOUS_LOGIN=yes
+    volumes:
+     - zookeeper_data:/bitnami/zookeeper
 
   kafka:
     image: bitnami/kafka:3.6
@@ -60,3 +62,4 @@ services:
 volumes:
   mongodb_data:
   kafka_data:
+  zookeeper_data:

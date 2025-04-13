@@ -1,23 +1,29 @@
-const { write } = require('../utils/utils');
-const { producer } = require('../config/kafka');
+const goldPriceRepository = require('../repositories/goldPriceRepository');
+const messageBrokerService = require('./messageBrokerService');
 
-const fetchGoldPrice = async () => {
-    const minPrice = 1800;
-    const maxPrice = 2200;
-    const randomPrice = (Math.random() * (maxPrice - minPrice) + minPrice).toFixed(2);
-    return parseFloat(randomPrice);
-};
-
-const updateGoldPrice = async () => {
-    const price = await fetchGoldPrice();
-    if (price) {
-        await write('gold_price', price);
-        const message = JSON.stringify({ keyID: 'gold_price', value: price, timestamp: new Date() });
-        await producer.send({
-            topic: 'gold-price-updates',
-            messages: [{ value: message }]
-        });
+class GoldPriceService {
+    async fetchGoldPrice() {
+        const minPrice = 1800;
+        const maxPrice = 2200;
+        const randomPrice = (Math.random() * (maxPrice - minPrice) + minPrice).toFixed(2);
+        return parseFloat(randomPrice);
     }
-};
 
-module.exports = { updateGoldPrice };
+    async updateGoldPrice() {
+        try {
+            const price = await this.fetchGoldPrice();
+            if (price) {
+                await goldPriceRepository.save('gold_price', price);
+                await messageBrokerService.publishMessage({
+                    keyID: 'gold_price',
+                    value: price,
+                    timestamp: new Date()
+                });
+            }
+        } catch (error) {
+            console.error('Error updating gold price:', error.message);
+        }
+    }
+}
+
+module.exports = new GoldPriceService();
