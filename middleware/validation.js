@@ -10,44 +10,27 @@ const validateGoldPriceData = (req, res, next) => {
     }
 
     // Kiểm tra cấu trúc data
-    if (!data || !data.brands || !Array.isArray(data.brands)) {
+    if (!data || !data.items || !Array.isArray(data.items)) {
         return res.status(400).json({
             status: 'error',
-            message: 'data must contain a brands array'
+            message: 'data must contain an items array'
         });
     }
 
-    // Kiểm tra từng brand
-    for (const brand of data.brands) {
-        if (!brand.name || typeof brand.name !== 'string') {
+    // Kiểm tra từng item
+    for (const item of data.items) {
+        if (!item.type || typeof item.type !== 'string') {
             return res.status(400).json({
                 status: 'error',
-                message: 'Each brand must have a name property as string'
+                message: `Each item must have a type property as string`
             });
         }
 
-        if (!brand.items || !Array.isArray(brand.items)) {
+        if (typeof item.buy !== 'number' || typeof item.sell !== 'number') {
             return res.status(400).json({
                 status: 'error',
-                message: `Brand ${brand.name} must have an items array`
+                message: `Each item must have buy and sell properties as numbers`
             });
-        }
-
-        // Kiểm tra từng item
-        for (const item of brand.items) {
-            if (!item.type || typeof item.type !== 'string') {
-                return res.status(400).json({
-                    status: 'error',
-                    message: `Each item in brand ${brand.name} must have a type property as string`
-                });
-            }
-
-            if (typeof item.buy !== 'number' || typeof item.sell !== 'number') {
-                return res.status(400).json({
-                    status: 'error',
-                    message: `Each item in brand ${brand.name} must have buy and sell properties as numbers`
-                });
-            }
         }
     }
 

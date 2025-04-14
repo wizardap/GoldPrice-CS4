@@ -3,7 +3,9 @@
 
 <head>
     <title>Gold Price Viewer</title>
+    <link rel="stylesheet" href="styles.css?v=1.0">
     <style>
+        /* Critical CSS inline for faster rendering */
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
@@ -71,6 +73,33 @@
             text-align: right;
             margin-top: 10px;
         }
+
+        .navigation {
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #f8f8f8;
+            border-radius: 5px;
+        }
+
+        .navigation a {
+            color: #0066cc;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .navigation a:hover {
+            text-decoration: underline;
+        }
+
+        .brand-name a {
+            color: #333;
+            text-decoration: none;
+        }
+
+        .brand-name a:hover {
+            color: #e6a112;
+            text-decoration: underline;
+        }
     </style>
     <script src="/socket.io/socket.io.js"></script>
 </head>
@@ -81,19 +110,244 @@
         <div id="content">Loading...</div>
     </div>
     <script>
-        const socket = io();
-        const urlParams = new URLSearchParams(window.location.search);
-        const keyID = urlParams.get('keyID') || 'gold_price';
+        // Throttle function to limit rate of function calls
+        function throttle(func, limit) {
+            let lastFunc;
+            let lastRan;
+            return function () {
+                const context = this;
+                const args = arguments;
+                if (!lastRan) {
+                    func.apply(context, args);
+                    lastRan = Date.now();
+                } else {
+                    clearTimeout(lastFunc);
+                    lastFunc = setTimeout(function () {
+                        if ((Date.now() - lastRan) >= limit) {
+                            func.apply(context, args);
+                            lastRan = Date.now();
+                        }
+                    }, limit - (Date.now() - lastRan));
+                }
+            }
+        }
+
+        // Use WebSocket transport explicitly
+        const socket = io({
+            transports: ['websocket'],
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000,
+            timeout: 20000
+        });
+
+        const pathParts = window.location.pathname.split('/');
+        const isAllView = pathParts.includes('all');
+        let keyID = isAllView ? null : pathParts[pathParts.length - 1];
+
         let lastUpdate = new Date();
+        let allBrandsData = {};
+        const MAX_BRANDS = 10;
+        const MAX_DATA_AGE_MS = 30 * 60 * 1000; // 30 minutes
 
-        socket.on('connect', () => socket.emit('subscribe', keyID));
+        if (isAllView) {
+            document.querySelector('h1').textContent = 'Gold Price Monitor - All Brands';
+        } else if (keyID) {
+            document.querySelector('h1').textContent = `${keyID} Gold Price Monitor`;
+        }
 
-        socket.on('priceUpdate', (data) => {
-            if (data.keyID === keyID && data.data && data.data.brands) {
-                lastUpdate = new Date(data.timestamp);
-                updateUI(data.data.brands);
+        socket.on('connect', () => {
+            if (isAllView) {
+                // Đăng ký nhận cập nhật từ tất cả các hãng
+                ['doji', 'pnj', 'sjc'].forEach(brand => {
+                    socket.emit('subscribe', brand);
+                });
+            } else if (keyID) {
+                socket.emit('subscribe', keyID.toLowerCase());
             }
         });
+
+        socket.on('priceUpdate', (data) => {
+            if (data.data && data.data.items) {
+                // Cập nhật dữ liệu của brand này trong bộ nhớ
+                allBrandsData[data.keyID] = {
+                    keyID: data.keyID,
+                    items: data.data.items,
+                    timestamp: data.timestamp
+                };
+
+                // Update UI based on current view
+                if (isAllView) {
+                    throttledUpdateAllBrands();
+                } else if (keyID && keyID.toLowerCase() === data.keyID.toLowerCase()) {
+                    lastUpdate = new Date(data.timestamp);
+                    throttledUpdateUI(data.keyID, data.data.items);
+                }
+            }
+        });
+
+        // Xem một brand
+        function updateUI(brandName, items) {
+            requestAnimationFrame(() => {
+                const contentElement = document.getElementById('content');
+                contentElement.innerHTML = '';
+
+                // Thêm navigation
+                contentElement.appendChild(createNavigation());
+
+                // Hiển thị brand
+                const brandElement = createBrandElement(brandName, items, lastUpdate);
+                contentElement.appendChild(brandElement);
+            });
+        }
+
+        // Xem tất cả các brand
+        function updateAllBrands() {
+            requestAnimationFrame(() => {
+                const contentElement = document.getElementById('content');
+                contentElement.innerHTML = '';
+
+                // Thêm navigation
+                contentElement.appendChild(createNavigation());
+
+                // Hiển thị tất cả các brands theo thứ tự
+                const sortedBrands = Object.keys(allBrandsData).sort();
+
+                for (const brandName of sortedBrands) {
+                    const brandData = allBrandsData[brandName];
+                    const brandElement = createBrandElement(
+                        brandName,
+                        brandData.items,
+                        new Date(brandData.timestamp),
+                        true // Thêm link
+                    );
+                    contentElement.appendChild(brandElement);
+                }
+            });
+        }
+
+        function createNavigation() {
+            const navElement = document.createElement('div');
+            navElement.className = 'navigation';
+
+            if (isAllView) {
+                navElement.innerHTML = `<span>Đang xem tất cả các hãng</span>`;
+            } else {
+                navElement.innerHTML = `<a href="/viewer/all">← Xem tất cả các hãng</a>`;
+            }
+
+            return navElement;
+        }
+
+        function createBrandElement(brandName, items, updateTime, addLink = false) {
+            const brandElement = document.createElement('div');
+            brandElement.className = 'brand-container';
+
+            const brandNameElement = document.createElement('div');
+            brandNameElement.className = 'brand-name';
+
+            if (addLink) {
+                brandNameElement.innerHTML = `<a href="/viewer/${brandName}">${brandName}</a>`;
+            } else {
+                brandNameElement.textContent = brandName;
+            }
+
+            brandElement.appendChild(brandNameElement);
+
+            if (items && items.length > 0) {
+                brandElement.appendChild(createItemsTable(items));
+            } else {
+                const noItems = document.createElement('p');
+                noItems.textContent = 'Không có dữ liệu';
+                brandElement.appendChild(noItems);
+            }
+
+            const updateTimeElement = document.createElement('div');
+            updateTimeElement.className = 'updated-time';
+            updateTimeElement.textContent = `Cập nhật lần cuối: ${updateTime.toLocaleString()}`;
+            brandElement.appendChild(updateTimeElement);
+
+            return brandElement;
+        }
+
+        function createItemsTable(items) {
+            const table = document.createElement('table');
+            table.className = 'items-table';
+
+            // Table header
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+            ['Loại', 'Giá mua', 'Giá bán'].forEach(text => {
+                const th = document.createElement('th');
+                th.textContent = text;
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+
+            // Table body
+            const tbody = document.createElement('tbody');
+            items.forEach(item => {
+                const row = document.createElement('tr');
+
+                const typeCell = document.createElement('td');
+                typeCell.textContent = item.type;
+                row.appendChild(typeCell);
+
+                const buyCell = document.createElement('td');
+                buyCell.className = 'buy-price';
+                buyCell.textContent = formatCurrency(item.buy);
+                row.appendChild(buyCell);
+
+                const sellCell = document.createElement('td');
+                sellCell.className = 'sell-price';
+                sellCell.textContent = formatCurrency(item.sell);
+                row.appendChild(sellCell);
+
+                tbody.appendChild(row);
+            });
+            table.appendChild(tbody);
+            return table;
+        }
+
+        const throttledUpdateUI = throttle(updateUI, 300);
+        const throttledUpdateAllBrands = throttle(updateAllBrands, 300);
+
+        // Fetch initial data
+        if (isAllView) {
+            fetch('/get-all')
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.length > 0) {
+                        data.forEach(brand => {
+                            allBrandsData[brand.keyID] = {
+                                keyID: brand.keyID,
+                                items: brand.items,
+                                timestamp: brand.timestamp
+                            };
+                        });
+                        updateAllBrands();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching initial data:', error);
+                    document.getElementById('content').innerHTML =
+                        '<div class="brand-container">Không thể tải dữ liệu giá vàng</div>';
+                });
+        } else if (keyID) {
+            fetch(`/get/${keyID}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.items) {
+                        lastUpdate = new Date(data.timestamp);
+                        updateUI(data.keyID, data.items);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching initial data:', error);
+                    document.getElementById('content').innerHTML =
+                        '<div class="brand-container">Không thể tải dữ liệu giá vàng</div>';
+                });
+        }
 
         function formatCurrency(value) {
             return new Intl.NumberFormat('vi-VN', {
@@ -103,87 +357,33 @@
             }).format(value);
         }
 
-        function updateUI(brands) {
-            const contentElement = document.getElementById('content');
-            contentElement.innerHTML = '';
+        function cleanupOldData() {
+            const now = Date.now();
+            const brands = Object.keys(allBrandsData);
 
+            // Remove old data
             brands.forEach(brand => {
-                const brandElement = document.createElement('div');
-                brandElement.className = 'brand-container';
-
-                const brandNameElement = document.createElement('div');
-                brandNameElement.className = 'brand-name';
-                brandNameElement.textContent = brand.name;
-                brandElement.appendChild(brandNameElement);
-
-                if (brand.items && brand.items.length > 0) {
-                    const table = document.createElement('table');
-                    table.className = 'items-table';
-
-                    // Table header
-                    const thead = document.createElement('thead');
-                    const headerRow = document.createElement('tr');
-                    ['Loại', 'Giá mua', 'Giá bán'].forEach(text => {
-                        const th = document.createElement('th');
-                        th.textContent = text;
-                        headerRow.appendChild(th);
-                    });
-                    thead.appendChild(headerRow);
-                    table.appendChild(thead);
-
-                    // Table body
-                    const tbody = document.createElement('tbody');
-                    brand.items.forEach(item => {
-                        const row = document.createElement('tr');
-
-                        const typeCell = document.createElement('td');
-                        typeCell.textContent = item.type;
-                        row.appendChild(typeCell);
-
-                        const buyCell = document.createElement('td');
-                        buyCell.className = 'buy-price';
-                        buyCell.textContent = formatCurrency(item.buy);
-                        row.appendChild(buyCell);
-
-                        const sellCell = document.createElement('td');
-                        sellCell.className = 'sell-price';
-                        sellCell.textContent = formatCurrency(item.sell);
-                        row.appendChild(sellCell);
-
-                        tbody.appendChild(row);
-                    });
-                    table.appendChild(tbody);
-                    brandElement.appendChild(table);
-                } else {
-                    const noItems = document.createElement('p');
-                    noItems.textContent = 'Không có dữ liệu';
-                    brandElement.appendChild(noItems);
+                if (now - new Date(allBrandsData[brand].timestamp).getTime() > MAX_DATA_AGE_MS) {
+                    delete allBrandsData[brand];
                 }
-
-                // Add last update time
-                const updateTimeElement = document.createElement('div');
-                updateTimeElement.className = 'updated-time';
-                updateTimeElement.textContent = `Cập nhật lần cuối: ${lastUpdate.toLocaleString()}`;
-                brandElement.appendChild(updateTimeElement);
-
-                contentElement.appendChild(brandElement);
             });
+
+            // If still too many brands, remove oldest
+            if (brands.length > MAX_BRANDS) {
+                const oldestBrand = brands.reduce((oldest, brand) => {
+                    return new Date(allBrandsData[brand].timestamp) < new Date(allBrandsData[oldest].timestamp)
+                        ? brand : oldest;
+                }, brands[0]);
+
+                delete allBrandsData[oldestBrand];
+            }
         }
 
-        // Fetch initial data
-        fetch(`/api/get/${keyID}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data && data.brands) {
-                    lastUpdate = new Date(data.timestamp);
-                    updateUI(data.brands);
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching initial data:', error);
-                document.getElementById('content').innerHTML =
-                    '<div class="brand-container">Không thể tải dữ liệu giá vàng</div>';
-            });
+        setInterval(cleanupOldData, 5 * 60 * 1000); // Every 5 minutes
+
+        window.addEventListener('beforeunload', () => {
+            socket.disconnect();
+        });
     </script>
 </body>
 

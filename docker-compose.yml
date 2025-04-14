@@ -7,7 +7,7 @@ services:
     environment:
       - ALLOW_ANONYMOUS_LOGIN=yes
     volumes:
-     - zookeeper_data:/bitnami/zookeeper
+      - zookeeper_data:/bitnami/zookeeper
 
   kafka:
     image: bitnami/kafka:3.6
@@ -17,28 +17,21 @@ services:
       - "9094:9094"
     environment:
       - BITNAMI_DEBUG=true
-      # Không khai báo process.roles để tránh kích hoạt KRaft
       - KAFKA_BROKER_ID=1
-      # Kết nối tới Zookeeper
       - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
-      # Cấu hình listener
-      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
-      # Giao thức bảo mật
-      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT
-      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
-      # Cho phép PLAINTEXT
-      - ALLOW_PLAINTEXT_LISTENER=yes
-      # Số lượng replica cho offset topic
-      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      # Fix the listeners configuration - remove the conflicting entries
       - KAFKA_CFG_LISTENERS=PLAINTEXT_INTERNAL://:9092,PLAINTEXT_EXTERNAL://:9094
       - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT_INTERNAL://kafka:9092,PLAINTEXT_EXTERNAL://localhost:9094
       - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT_INTERNAL:PLAINTEXT,PLAINTEXT_EXTERNAL:PLAINTEXT
       - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT_INTERNAL
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
     depends_on:
       - zookeeper
     volumes:
       - kafka_data:/bitnami/kafka
+
   mongodb:
     image: mongo:latest
     container_name: mongodb
@@ -46,7 +39,7 @@ services:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
-    
+
   app:
     build: .
     container_name: gold-price-app
@@ -59,7 +52,17 @@ services:
       - .:/app
       - /app/node_modules
 
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --save 60 1
+
 volumes:
   mongodb_data:
   kafka_data:
   zookeeper_data:
+  redis_data:
