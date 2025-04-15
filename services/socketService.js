@@ -47,15 +47,13 @@ class SocketService {
                 this.clients.delete(socket.id);
             });
         });
-
-        // Buffer messages to reduce Socket.IO overhead
-        messageBrokerService.subscribeToMessages((goldPrice) => {
-            this.bufferMessage(goldPrice, io);
-        });
     }
 
-    bufferMessage(goldPrice, io) {
-        const keyID = goldPrice.keyID;
+    // Modified bufferMessage method
+    bufferMessage(event) {
+        if (!event || !event.keyID) return;
+
+        const keyID = event.keyID;
 
         // Check if buffer size limit reached
         if (this.messageBuffer.size >= this.MAX_BUFFER_SIZE && !this.messageBuffer.has(keyID)) {
@@ -71,16 +69,15 @@ class SocketService {
 
             if (oldestEntry) {
                 const [oldestKey] = oldestEntry;
-                this.flushBuffer(oldestKey, io);
+                this.flushBuffer(oldestKey);
             }
         }
 
-        // Rest of your existing code...
         if (!this.messageBuffer.has(keyID)) {
-            this.messageBuffer.set(keyID, goldPrice);
+            this.messageBuffer.set(keyID, event);
         } else {
             // Always update with latest data
-            this.messageBuffer.set(keyID, goldPrice);
+            this.messageBuffer.set(keyID, event);
         }
 
         // Clear existing timer if present
@@ -90,16 +87,17 @@ class SocketService {
 
         // Set new timer to flush buffer
         const timer = setTimeout(() => {
-            this.flushBuffer(keyID, io);
+            this.flushBuffer(keyID);
         }, this.bufferTimeout);
 
         this.bufferTimers.set(keyID, timer);
     }
 
-    flushBuffer(keyID, io) {
-        if (this.messageBuffer.has(keyID)) {
-            const goldPrice = this.messageBuffer.get(keyID);
-            io.to(keyID).emit('priceUpdate', goldPrice);
+    // Modified flushBuffer method
+    flushBuffer(keyID) {
+        if (this.messageBuffer.has(keyID) && this.io) {
+            const event = this.messageBuffer.get(keyID);
+            this.io.to(keyID).emit('priceUpdate', event);
             this.messageBuffer.delete(keyID);
             this.bufferTimers.delete(keyID);
         }

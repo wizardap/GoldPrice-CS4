@@ -1,5 +1,6 @@
 const goldPriceRepository = require('../repositories/goldPriceRepository');
 const messageBrokerService = require('./messageBrokerService');
+const GoldPriceEvent = require('../events/goldPriceEvents');
 
 class GoldPriceService {
     constructor() {
@@ -48,7 +49,7 @@ class GoldPriceService {
         return { items: randomizedItems };
     }
 
-    // Update price for a single brand
+    // Update price for a single brand using event model
     async updateSingleBrandPrice(brand) {
         try {
             const brandLower = brand.toLowerCase();
@@ -59,12 +60,14 @@ class GoldPriceService {
             // Save to database
             await goldPriceRepository.save(brandLower, priceData);
 
-            // Publish to message broker
-            await messageBrokerService.publishMessage({
-                keyID: brandLower,
-                data: priceData,
-                timestamp: new Date()
-            });
+            // Create and publish price update event
+            const priceEvent = GoldPriceEvent.priceUpdated(
+                brandLower,
+                priceData,
+                { source: 'scheduled-update' }
+            );
+
+            await messageBrokerService.publishMessage(priceEvent);
 
             return true;
         } catch (error) {
@@ -92,9 +95,10 @@ class GoldPriceService {
     async addBrand(keyID, data) {
         try {
             const keyIDLower = keyID.toLowerCase();
+            const isNewBrand = !this.brandData[keyIDLower];
 
             // Add to brand list if new
-            if (!this.brandData[keyIDLower]) {
+            if (isNewBrand) {
                 this.brandData[keyIDLower] = { items: [] };
                 this.brands = Object.keys(this.brandData);
             }
@@ -105,12 +109,16 @@ class GoldPriceService {
             // Save to database
             await goldPriceRepository.save(keyIDLower, data);
 
-            // Publish to message broker
-            await messageBrokerService.publishMessage({
-                keyID: keyIDLower,
-                data,
-                timestamp: new Date()
-            });
+            // Create appropriate event
+            let event;
+            if (isNewBrand) {
+                event = GoldPriceEvent.newBrandAdded(keyIDLower, data);
+            } else {
+                event = GoldPriceEvent.priceUpdated(keyIDLower, data);
+            }
+
+            // Publish the event
+            await messageBrokerService.publishMessage(event);
 
             return true;
         } catch (error) {

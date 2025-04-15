@@ -149,6 +149,22 @@ class Application {
             // Initialize socket service
             socketService.initSocket(this.io);
 
+            // Initialize event-driven architecture
+            const messageBrokerService = require('./services/messageBrokerService');
+            const GoldPriceEventHandlers = require('./handlers/goldPriceEventHandlers');
+
+            // Setup event handlers
+            console.log('Initializing event handlers...');
+            const eventHandlers = new GoldPriceEventHandlers(messageBrokerService);
+
+            // Register socket callback for backward compatibility
+            // This is the line that fixes the infinite recursion
+            messageBrokerService.registerSocketCallback(data => socketService.bufferMessage(data));
+
+            // Subscribe to messages (starts consuming from Kafka)
+            await messageBrokerService.subscribeToMessages();
+            console.log('Event-driven architecture initialized');
+
             // More efficient dynamic update interval
             const dynamicUpdateInterval = () => {
                 const connectionCount = this.io.engine.clientsCount;
