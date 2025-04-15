@@ -1,42 +1,50 @@
-const sqlite3 = require('sqlite3').verbose();
-const db = new sqlite3.Database('./db/app.db');
+const Data = require('./models/data');
 
-db.run(`
-        CREATE TABLE IF NOT EXISTS data(
-        keyID TEXT,
-        value TEXT,
-        PRIMARY KEY (keyID)
-        ) STRICT
-`);
+/**
+ * Add or update a gold seller and their products
+ * @param {string} key - The gold seller name
+ * @param {Array} value - Array of products with type, sellPrice, buyPrice
+ * @returns {Promise<Object>} The saved document
+ */
+async function write(key, value) {
+    try {
+        // Ensure each product has an updatedAt timestamp
+        const productsWithTimestamp = Array.isArray(value) ?
+            value.map(product => ({
+                ...product,
+                updatedAt: new Date()
+            })) : [];
 
-function write(key, value) {
-    return new Promise((resolve, reject) => {
-        return db.run(`
-            INSERT INTO data (keyID, value) VALUES ("${key}", "${value}")
-            ON CONFLICT(keyID) DO UPDATE SET value = "${value}"
-        `, [], function (err) {
-            if (err) {
-                return reject(err.message);
-            }
-            return resolve(this.lastID);
-        });
-    });
+        // Using upsert - update if exists, insert if not
+        const result = await Data.findOneAndUpdate(
+            { keyID: key },
+            { keyID: key, products: productsWithTimestamp },
+            { upsert: true, new: true }
+        );
+
+        return result;
+    } catch (err) {
+        console.error('Database write error:', err);
+        throw err;
+    }
 }
 
-function view(key) {
-    return new Promise((resolve, reject) => {
-        db.get(`
-            SELECT value FROM data WHERE keyID = ?
-        `, [key], function (err, row) {
-            if (err) {
-                return reject(err.message);
-            }
-            return resolve(row ? row.value : null);
-        });
-    });
+/**
+ * Retrieve a value from the database by key
+ * @param {string} key - The gold seller name
+ * @returns {Promise<Array|null>} The products array or null if not found
+ */
+async function view(key) {
+    try {
+        const data = await Data.findOne({ keyID: key });
+        return data ? data.products : null;
+    } catch (err) {
+        console.error('Database read error:', err);
+        throw err;
+    }
 }
 
 module.exports = {
     write,
     view
-}
+};
