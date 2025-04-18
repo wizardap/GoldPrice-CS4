@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>GoldPrice System Architecture</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+      margin-top: 30px;
+    }
+    h1 {
+      text-align: center;
+    }
+    .export-instructions {
+      margin-top: 30px;
+      padding: 10px;
+      background-color: #f5f5f5;
+      border: 1px solid #ddd;
+    }
+  </style>
+</head>
+<body>
+  <h1>GoldPrice System Architecture</h1>
+  
+  <div class="mermaid">
+    graph TD
+      subgraph Clients
+        UI[Web UI / Mobile App]
+        API[External Systems]
+      end
+
+      subgraph "API Layer"
+        REST[REST API]
+      end
+
+      subgraph "Message Broker"
+        KAFKA[Kafka]
+      end
+      
+      subgraph "Real-time Layer"
+        SOCKET[Socket.IO]
+      end
+      
+      subgraph "Persistence Layer"
+        DB[(MongoDB)]
+        CACHE[(Redis Cache)]
+      end
+      
+      API -->|POST /api/add| REST
+      UI -->|GET /api/get/:id| REST
+      REST -->|Publish| KAFKA
+      REST -->|Query| DB
+      REST -->|Get/Set| CACHE
+      KAFKA -->|Subscribe| SOCKET
+      SOCKET -->|Real-time Update| UI
+      DB -->|Cache Result| CACHE
+      CACHE -->|Fast Response| REST
+
+      classDef primary fill:#4285F4,stroke:#0D47A1,color:#fff
+      classDef secondary fill:#34A853,stroke:#1B5E20,color:#fff
+      classDef cache fill:#FBBC05,stroke:#B86E00,color:#fff
+      classDef database fill:#EA4335,stroke:#B71C1C,color:#fff
+      classDef client fill:#9C27B0,stroke:#6A1B9A,color:#fff
+      
+      class REST,SOCKET primary
+      class KAFKA secondary
+      class CACHE cache
+      class DB database
+      class UI,API client
+  </div>
+
+  <div class="export-instructions">
+    <p>Để lưu hình ảnh này:</p>
+    <ol>
+      <li>Đợi cho đến khi diagram được render hoàn tất</li>
+      <li>Click chuột phải vào diagram</li>
+      <li>Chọn "Save image as..." để lưu dưới dạng PNG</li>
+      <li>Lưu file với tên "architecture.png" trong thư mục docs</li>
+    </ol>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      securityLevel: 'loose',
+      fontFamily: 'Arial',
+      fontSize: 14
+    });
+  </script>
+</body>
+</html>

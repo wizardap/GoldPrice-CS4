@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Theo dõi giá vàng</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Socket.io -->
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  <style>
+    .price-card {
+      transition: background-color 0.5s ease;
+    }
+    .price-up {
+      background-color: rgba(76, 175, 80, 0.2) !important;
+    }
+    .price-down {
+      background-color: rgba(244, 67, 54, 0.2) !important;
+    }
+    .gold-type {
+      font-weight: bold;
+      color: #D4AF37;
+    }
+    .timestamp {
+      font-size: 0.8rem;
+      color: #6c757d;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-dark bg-dark">
+    <div class="container">
+      <a class="navbar-brand" href="/">
+        <i class="bi bi-coin"></i> Theo dõi giá vàng
+      </a>
+    </div>
+  </nav>
+
+  <div class="container mt-4">
+    <div class="row">
+      <div class="col-12">
+        <div class="card shadow-sm mb-4">
+          <div class="card-header d-flex justify-content-between align-items-center bg-warning text-dark">
+            <h5 class="mb-0" id="vendor-title">Đang tải...</h5>
+            <span class="badge bg-dark" id="connection-status">Đang kết nối...</span>
+          </div>
+          <div class="card-body">
+            <div class="timestamp text-end mb-2">Cập nhật lần cuối: <span id="last-update">--/--/---- --:--:--</span></div>
+            <div class="table-responsive">
+              <table class="table table-striped">
+                <thead>
+                  <tr>
+                    <th>Loại vàng</th>
+                    <th class="text-end">Giá mua (VNĐ)</th>
+                    <th class="text-end">Giá bán (VNĐ)</th>
+                    <th class="text-end">Chênh lệch</th>
+                  </tr>
+                </thead>
+                <tbody id="price-table-body">
+                  <tr>
+                    <td colspan="4" class="text-center">Đang tải dữ liệu...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-12">
+        <div class="card shadow-sm">
+          <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Biểu đồ giá</h5>
+          </div>
+          <div class="card-body">
+            <div class="mb-3">
+              <select class="form-select" id="gold-type-select">
+                <option selected>Chọn loại vàng</option>
+              </select>
+            </div>
+            <canvas id="priceChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Lấy vendor ID từ URL
+    const locationPath = window.location.pathname.split("/");
+    const vendorId = locationPath[locationPath.length - 1];
+    let priceHistory = [];
+    let lastPrices = {};
+    let chart = null;
+    
+    // Định dạng số tiền
+    function formatCurrency(amount) {
+      return new Intl.NumberFormat('vi-VN').format(amount);
+    }
+    
+    // Định dạng thời gian
+    function formatDate(date) {
+      if (!date) return '--/--/---- --:--:--';
+      const d = new Date(date);
+      return d.toLocaleString('vi-VN');
+    }
+    
+    // Cập nhật DOM với dữ liệu mới nhất
+    function updateUI(data) {
+      // Cập nhật thông tin vendor
+      document.getElementById('vendor-title').innerText = `Giá vàng - ${vendorId.toUpperCase()}`;
+      document.getElementById('last-update').innerText = formatDate(data.timestamp);
+      
+      // Cập nhật bảng giá
+      const tableBody = document.getElementById('price-table-body');
+      tableBody.innerHTML = '';
+      
+      if (data.value && Array.isArray(data.value)) {
+        // Cập nhật select option cho loại vàng
+        const goldTypeSelect = document.getElementById('gold-type-select');
+        goldTypeSelect.innerHTML = '<option value="">Chọn loại vàng</option>';
+        
+        data.value.forEach(product => {
+          // Thêm loại vàng vào select
+          const option = document.createElement('option');
+          option.value = product.type;
+          option.textContent = product.type;
+          goldTypeSelect.appendChild(option);
+          
+          // Tính chênh lệch giá
+          const difference = product.sellPrice - product.buyPrice;
+          const differencePercent = ((difference / product.buyPrice) * 100).toFixed(2);
+          
+          // Tạo dòng mới trong bảng
+          const row = document.createElement('tr');
+          row.className = 'price-card';
+          
+          // So sánh với giá cũ để highlight thay đổi
+          if (lastPrices[product.type]) {
+            if (product.sellPrice > lastPrices[product.type].sellPrice) {
+              row.classList.add('price-up');
+            } else if (product.sellPrice < lastPrices[product.type].sellPrice) {
+              row.classList.add('price-down');
+            }
+          }
+          
+          row.innerHTML = `
+            <td><span class="gold-type">${product.type}</span></td>
+            <td class="text-end">${formatCurrency(product.buyPrice)}</td>
+            <td class="text-end">${formatCurrency(product.sellPrice)}</td>
+            <td class="text-end">${formatCurrency(difference)} (${differencePercent}%)</td>
+          `;
+          
+          tableBody.appendChild(row);
+          
+          // Lưu giá mới nhất vào cache
+          lastPrices[product.type] = {
+            buyPrice: product.buyPrice,
+            sellPrice: product.sellPrice
+          };
+          
+          // Thêm giá mới vào history
+          priceHistory.push({
+            type: product.type,
+            buyPrice: product.buyPrice,
+            sellPrice: product.sellPrice,
+            timestamp: new Date(data.timestamp)
+          });
+        });
+        
+        // Nếu đã có loại vàng được chọn, cập nhật biểu đồ
+        const selectedType = goldTypeSelect.value;
+        if (selectedType) {
+          updateChart(selectedType);
+        }
+      } else {
+        tableBody.innerHTML = '<tr><td colspan="4" class="text-center">Không có dữ liệu</td></tr>';
+      }
+      
+      // Sau 2 giây, xóa các lớp highlight
+      setTimeout(() => {
+        document.querySelectorAll('.price-up, .price-down').forEach(el => {
+          el.classList.remove('price-up', 'price-down');
+        });
+      }, 2000);
+    }
+    
+    // Khởi tạo và cập nhật biểu đồ
+    function updateChart(goldType) {
+      const ctx = document.getElementById('priceChart');
+      
+      // Lọc dữ liệu cho loại vàng được chọn
+      const filteredData = priceHistory.filter(item => item.type === goldType);
+      
+      // Giới hạn số lượng điểm dữ liệu để biểu đồ không quá dày
+      const dataLimit = 20;
+      const limitedData = filteredData.slice(-dataLimit);
+      
+      // Chuẩn bị dữ liệu cho biểu đồ
+      const labels = limitedData.map(item => {
+        const d = new Date(item.timestamp);
+        return d.toLocaleTimeString('vi-VN');
+      });
+      
+      const buyPrices = limitedData.map(item => item.buyPrice);
+      const sellPrices = limitedData.map(item => item.sellPrice);
+      
+      // Nếu biểu đồ đã tồn tại, hủy nó
+      if (chart) {
+        chart.destroy();
+      }
+      
+      // Tạo biểu đồ mới
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Giá mua',
+              data: buyPrices,
+              borderColor: 'rgba(75, 192, 192, 1)',
+              backgroundColor: 'rgba(75, 192, 192, 0.2)',
+              tension: 0.1
+            },
+            {
+              label: 'Giá bán',
+              data: sellPrices,
+              borderColor: 'rgba(255, 99, 132, 1)',
+              backgroundColor: 'rgba(255, 99, 132, 0.2)',
+              tension: 0.1
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: false,
+              ticks: {
+                callback: function(value) {
+                  return formatCurrency(value);
+                }
+              }
+            }
+          },
+          interaction: {
+            mode: 'index',
+            intersect: false
+          }
+        }
+      });
+    }
+    
+    // Khi người dùng chọn loại vàng
+    document.getElementById('gold-type-select').addEventListener('change', function(e) {
+      const selectedType = e.target.value;
+      if (selectedType) {
+        updateChart(selectedType);
+      }
+    });
+    
+    // Kết nối Socket.io
+    const socket = io();
+    
+    // Khi kết nối thành công
+    socket.on('connect', function() {
+      document.getElementById('connection-status').innerText = 'Đã kết nối';
+      document.getElementById('connection-status').classList.remove('bg-danger');
+      document.getElementById('connection-status').classList.add('bg-success');
+      
+      // Đăng ký theo dõi vendor
+      socket.emit('join', vendorId);
+    });
+    
+    // Khi mất kết nối
+    socket.on('disconnect', function() {
+      document.getElementById('connection-status').innerText = 'Mất kết nối';
+      document.getElementById('connection-status').classList.remove('bg-success');
+      document.getElementById('connection-status').classList.add('bg-danger');
+    });
+    
+    // Nhận cập nhật giá thời gian thực
+    socket.on('priceUpdate', function(data) {
+      if (data && data.key === vendorId) {
+        updateUI(data);
+      }
+    });
+    
+    // Lấy dữ liệu ban đầu khi trang tải xong
+    fetch(`/api/get/${vendorId}`)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Không thể lấy dữ liệu từ server');
+        }
+        return response.json();
+      })
+      .then(result => {
+        if (result.success && result.data) {
+          updateUI(result.data);
+        }
+      })
+      .catch(error => {
+        console.error('Lỗi:', error);
+        document.getElementById('price-table-body').innerHTML = 
+          `<tr><td colspan="4" class="text-center text-danger">Lỗi: ${error.message}</td></tr>`;
+      });
+    
+    // Lấy dữ liệu lịch sử
+    fetch(`/api/history/${vendorId}?limit=100`)
+      .then(response => response.json())
+      .then(result => {
+        if (result.success && result.data && result.data.length > 0) {
+          // Lưu dữ liệu lịch sử
+          result.data.forEach(item => {
+            item.value.forEach(product => {
+              priceHistory.push({
+                type: product.type,
+                buyPrice: product.buyPrice,
+                sellPrice: product.sellPrice,
+                timestamp: new Date(item.timestamp)
+              });
+            });
+          });
+          
+          // Nếu có dữ liệu, chọn loại vàng đầu tiên để hiển thị biểu đồ
+          if (priceHistory.length > 0) {
+            const firstType = priceHistory[0].type;
+            document.getElementById('gold-type-select').value = firstType;
+            updateChart(firstType);
+          }
+        }
+      })
+      .catch(error => console.error('Lỗi khi lấy dữ liệu lịch sử:', error));
+  </script>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

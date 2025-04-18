@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Publisher-Subscriber Scenarios - GoldPrice System</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      line-height: 1.6;
+    }
+    .mermaid {
+      margin-bottom: 60px;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 30px;
+    }
+    h2 {
+      color: #2c3e50;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+      margin-top: 40px;
+    }
+    .scenario {
+      margin-bottom: 80px;
+      padding: 20px;
+      border-radius: 8px;
+      background-color: #f9f9f9;
+    }
+    .explanation {
+      background-color: #f5f5f5;
+      padding: 15px;
+      border-left: 4px solid #3498db;
+      margin-top: 20px;
+    }
+    .error-scenario {
+      background-color: #fdedec;
+    }
+    .normal-scenario {
+      background-color: #eafaf1;
+    }
+    .code-example {
+      background-color: #f8f9fa;
+      padding: 15px;
+      border-radius: 5px;
+      font-family: monospace;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>Publisher-Subscriber Pattern Scenarios in GoldPrice System</h1>
+  
+  <p>
+    Dự án GoldPrice sử dụng mẫu thiết kế Publisher-Subscriber (Pub-Sub) để xử lý cập nhật giá vàng theo thời gian thực.
+    Sơ đồ dưới đây minh họa luồng hoạt động và các tình huống khác nhau có thể xảy ra trong hệ thống.
+  </p>
+
+  <h2>Kiến trúc Pub-Sub của hệ thống</h2>
+  <div class="scenario normal-scenario">
+    <p><strong>Components:</strong></p>
+    <ul>
+      <li><strong>Publishers</strong>: API endpoint <code>/api/add</code> (goldPriceController.addPrice)</li>
+      <li><strong>Message Broker</strong>: Kafka</li>
+      <li><strong>Subscribers</strong>: 
+        <ul>
+          <li>Primary subscriber: Kafka consumer trong index.js</li>
+          <li>Secondary subscribers: Socket.IO clients (web browsers)</li>
+        </ul>
+      </li>
+    </ul>
+    
+    <div class="mermaid">
+      graph TD
+        API["/api/add API Endpoint"] -->|"publishMessage()"| Kafka[Kafka Broker]
+        Kafka -->|"consumeMessages()"| Consumer[Kafka Consumer]
+        Consumer -->|"emitPriceUpdate()"| Socket[Socket.IO Server]
+        Socket -->|"priceUpdate event"| Client[Browser Clients]
+        
+        classDef primary fill:#4285F4,stroke:#0D47A1,color:#fff
+        classDef secondary fill:#34A853,stroke:#1B5E20,color:#fff
+        classDef broker fill:#FBBC05,stroke:#B86E00,color:#fff
+        classDef client fill:#EA4335,stroke:#B71C1C,color:#fff
+        
+        class API primary
+        class Kafka broker
+        class Consumer,Socket secondary
+        class Client client
+    </div>
+  </div>
+
+  <h2>Scenario 1: Luồng hoạt động bình thường</h2>
+  <div class="scenario normal-scenario">
+    <div class="mermaid">
+      sequenceDiagram
+        participant Client as External Client
+        participant API as API (/api/add)
+        participant DB as MongoDB
+        participant Kafka as Kafka Broker
+        participant Consumer as Kafka Consumer
+        participant Socket as Socket.IO Server
+        participant Browser as Browser Client
+        
+        Client->>API: POST /api/add (gold price data)
+        API->>DB: Lưu dữ liệu giá vàng mới
+        Note over API,DB: Sử dụng Mongoose ORM
+        DB-->>API: Lưu thành công
+        API->>Kafka: publishMessage(priceUpdate)
+        Note over API,Kafka: Publisher role
+        Kafka-->>API: Ack (success)
+        API-->>Client: Response 201 Created
+
+        Kafka->>Consumer: Deliver message
+        Note over Kafka,Consumer: Subscriber role
+        Consumer->>Socket: emitPriceUpdate(keyID, data)
+        Consumer-->>Kafka: Commit offset
+        Socket->>Browser: Emit "priceUpdate" event
+        Note over Socket,Browser: Realtime update
+        Browser->>Browser: Cập nhật UI
+    </div>
+    
+    <div class="explanation">
+      <p><strong>Giải thích:</strong></p>
+      <p>
+        Đây là luồng hoạt động lý tưởng của mẫu Pub-Sub trong hệ thống:
+      </p>
+      <ol>
+        <li>Client gửi dữ liệu giá vàng mới thông qua API <code>/api/add</code></li>
+        <li>API lưu dữ liệu vào MongoDB và publish một message vào Kafka</li>
+        <li>Kafka consumer (subscriber) nhận message và gửi tới Socket.IO server</li>
+        <li>Socket.IO server broadcast cập nhật tới các client đang theo dõi vendor tương ứng</li>
+        <li>Browser client nhận cập nhật và hiển thị giá mới</li>
+      </ol>
+      <p><strong>Code liên quan:</strong></p>
+      <div class="code-example">
+        // Publisher (src/controllers/goldPriceController.js)
+        await kafka.publishMessage({
+          key: key,
+          type: 'PRICE_UPDATED',
+          value: value,
+          timestamp: newPrice.timestamp
+        });
+
+        // Subscriber (src/index.js)
+        await consumeMessages(async (message) => {
+          if (message.type === 'PRICE_UPDATED' && message.key) {
+            emitPriceUpdate(message.key, message);
+          }
+        });
+      </div>
+    </div>
+  </div>
+
+  <h2>Scenario 2: Kafka Broker không khả dụng</h2>
+  <div class="scenario error-scenario">
+    <div class="mermaid">
+      sequenceDiagram
+        participant Client as External Client
+        participant API as API (/api/add)
+        participant DB as MongoDB
+        participant Kafka as Kafka Broker
+        participant Browser as Browser Client
+        
+        Client->>API: POST /api/add (gold price data)
+        API->>DB: Lưu dữ liệu giá vàng mới
+        DB-->>API: Lưu thành công
+        API-xKafka: publishMessage() throws error
+        Note over API,Kafka: Kafka connection failed
+        API-->>Client: Response 201 Created (lưu ý: vẫn thành công)
+        Note over Browser: Không nhận được cập nhật
+        Note over API: Log error
+    </div>
+    
+    <div class="explanation">
+      <p><strong>Giải thích:</strong></p>
+      <p>
+        Khi Kafka broker không khả dụng:
+      </p>
+      <ol>
+        <li>Dữ liệu vẫn được lưu vào MongoDB thành công</li>
+        <li>Việc publish message tới Kafka thất bại, nhưng API vẫn trả về thành công cho client</li>
+        <li>Hệ thống ghi log lỗi nhưng không có retry mechanism (điểm yếu)</li>
+        <li>Client browser không nhận được cập nhật real-time, phải refresh để thấy dữ liệu mới</li>
+      </ol>
+      <p><strong>Cải thiện có thể thực hiện:</strong></p>
+      <ul>
+        <li>Triển khai cơ chế retry cho Kafka publisher</li>
+        <li>Lưu message vào một queue local khi Kafka không khả dụng</li>
+        <li>Gửi thông báo qua Socket.IO trực tiếp (fallback) khi Kafka failed</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Scenario 3: Consumer Service Down</h2>
+  <div class="scenario error-scenario">
+    <div class="mermaid">
+      sequenceDiagram
+        participant Client as External Client
+        participant API as API (/api/add)
+        participant DB as MongoDB
+        participant Kafka as Kafka Broker
+        participant Consumer as Kafka Consumer
+        participant Browser as Browser Client
+        
+        Client->>API: POST /api/add (gold price data)
+        API->>DB: Lưu dữ liệu giá vàng mới
+        DB-->>API: Lưu thành công
+        API->>Kafka: publishMessage(priceUpdate)
+        Kafka-->>API: Ack (success)
+        API-->>Client: Response 201 Created
+        
+        Note over Consumer: Consumer service down
+        Note over Kafka: Messages accumulate in topic
+        Note over Browser: Không nhận được cập nhật
+        
+        Note over Consumer: Later: Consumer restarts
+        Kafka->>Consumer: Deliver accumulated messages
+        Consumer->>Browser: Emit updates (delayed)
+    </div>
+    
+    <div class="explanation">
+      <p><strong>Giải thích:</strong></p>
+      <p>
+        Khi Kafka consumer service bị lỗi hoặc restart:
+      </p>
+      <ol>
+        <li>Message được publish vào Kafka thành công</li>
+        <li>Kafka lưu trữ các message trong topic (một trong những lợi ích chính của message broker)</li>
+        <li>Khi consumer khởi động lại, nó sẽ tiếp tục xử lý các message từ offset gần nhất chưa commit</li>
+        <li>Client browser sẽ nhận được cập nhật, nhưng bị trễ</li>
+      </ol>
+      <p><strong>Lợi ích của Pub-Sub ở đây:</strong></p>
+      <ul>
+        <li>Dữ liệu không bị mất ngay cả khi consumer down</li>
+        <li>Hệ thống tự phục hồi khi consumer khởi động lại</li>
+        <li>Publisher không bị ảnh hưởng bởi lỗi của subscriber</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Scenario 4: Client Reconnection & Recovery</h2>
+  <div class="scenario normal-scenario">
+    <div class="mermaid">
+      sequenceDiagram
+        participant Client as External Client
+        participant API as API (/api/add)
+        participant DB as MongoDB
+        participant Kafka as Kafka Broker
+        participant Consumer as Kafka Consumer
+        participant Socket as Socket.IO Server
+        participant Browser as Browser Client
+        
+        Note over Browser: Connection lost
+        Client->>API: POST /api/add (new data)
+        API->>DB: Save to MongoDB
+        API->>Kafka: Publish message
+        Kafka->>Consumer: Deliver message
+        Consumer->>Socket: emitPriceUpdate()
+        Note over Socket,Browser: Browser disconnected, update missed
+        
+        Browser->>Socket: Reconnect
+        Browser->>Socket: join(vendorId)
+        Browser->>API: GET /api/get/:id
+        API-->>Browser: Return latest data
+        
+        Client->>API: POST /api/add (newer data)
+        API->>Kafka: Publish message
+        Kafka->>Consumer: Deliver message
+        Consumer->>Socket: emitPriceUpdate()
+        Socket->>Browser: Emit "priceUpdate" event
+    </div>
+    
+    <div class="explanation">
+      <p><strong>Giải thích:</strong></p>
+      <p>
+        Khi client browser mất kết nối và kết nối lại:
+      </p>
+      <ol>
+        <li>Trong thời gian mất kết nối, client không nhận được cập nhật real-time</li>
+        <li>Khi kết nối lại, Socket.IO tự động xử lý reconnection</li>
+        <li>Client cần thực hiện API call để lấy dữ liệu mới nhất (đã triển khai trong viewer.html)</li>
+        <li>Client cần tham gia lại phòng Socket.IO (đã triển khai trong viewer.html)</li>
+        <li>Từ thời điểm kết nối lại, client sẽ nhận được các cập nhật mới</li>
+      </ol>
+      <p><strong>Code liên quan:</strong></p>
+      <div class="code-example">
+        // Client side (src/views/viewer.html)
+        socket.on('connect', function() {
+          document.getElementById('connection-status').innerText = 'Đã kết nối';
+          // Đăng ký theo dõi vendor
+          socket.emit('join', vendorId);
+        });
+        
+        socket.on('disconnect', function() {
+          document.getElementById('connection-status').innerText = 'Mất kết nối';
+        });
+      </div>
+    </div>
+  </div>
+
+  <h2>Scenario 5: Xử lý message lỗi</h2>
+  <div class="scenario error-scenario">
+    <div class="mermaid">
+      sequenceDiagram
+        participant Client as External Client
+        participant API as API (/api/add)
+        participant Kafka as Kafka Broker
+        participant Consumer as Kafka Consumer
+        participant Socket as Socket.IO Server
+        
+        Client->>API: POST /api/add (malformed data)
+        API->>Kafka: Publish message
+        Kafka->>Consumer: Deliver message
+        Consumer-xConsumer: Error handling message
+        Note over Consumer: Exception caught in try-catch
+        Consumer-->>Kafka: No offset commit (due to error)
+        Note over Kafka,Consumer: Risk of continuous redelivery
+    </div>
+    
+    <div class="explanation">
+      <p><strong>Giải thích:</strong></p>
+      <p>
+        Khi xử lý message gặp lỗi ở consumer:
+      </p>
+      <ol>
+        <li>Consumer nhận message từ Kafka</li>
+        <li>Trong quá trình xử lý, có thể xảy ra lỗi (ví dụ: JSON parsing error, logic error)</li>
+        <li>Exception được bắt trong try-catch block</li>
+        <li>Hiện tại hệ thống chỉ log lỗi, không có cơ chế xử lý message lỗi (dead-letter queue)</li>
+        <li>Vì offset không được commit, Kafka sẽ gửi lại message, có thể dẫn đến lặp vô hạn</li>
+      </ol>
+      <p><strong>Cải thiện có thể thực hiện:</strong></p>
+      <ul>
+        <li>Triển khai Dead Letter Queue (DLQ) để lưu message lỗi</li>
+        <li>Thêm logic kiểm tra số lần retry và quyết định bỏ qua sau một số lần nhất định</li>
+        <li>Thêm validation chặt chẽ hơn ở phía publisher</li>
+      </ul>
+      <p><strong>Code liên quan:</strong></p>
+      <div class="code-example">
+        // Subscriber (src/index.js)
+        await consumeMessages(async (message) => {
+          try {
+            if (message.type === 'PRICE_UPDATED' && message.key) {
+              emitPriceUpdate(message.key, message);
+            }
+          } catch (error) {
+            logger.error(`Lỗi xử lý Kafka message: ${error.message}`);
+            // No mechanism to handle failed messages
+          }
+        });
+      </div>
+    </div>
+  </div>
+
+  <h2>Scenario 6: Scaling với nhiều instance</h2>
+  <div class="scenario normal-scenario">
+    <div class="mermaid">
+      sequenceDiagram
+        participant Client as External Client
+        participant API1 as API Instance 1
+        participant API2 as API Instance 2
+        participant Kafka as Kafka Broker
+        participant Consumer1 as Consumer Instance 1
+        participant Consumer2 as Consumer Instance 2
+        participant Socket as Socket.IO Cluster
+        participant Browser as Browser Clients
+        
+        Client->>API1: POST /api/add (data)
+        API1->>Kafka: Publish message
+        
+        Client->>API2: POST /api/add (other data)
+        API2->>Kafka: Publish message
+        
+        Kafka->>Consumer1: Deliver some messages
+        Kafka->>Consumer2: Deliver other messages
+        
+        Consumer1->>Socket: emitPriceUpdate()
+        Consumer2->>Socket: emitPriceUpdate()
+        
+        Socket->>Browser: Emit updates to clients
+    </div>
+    
+    <div class="explanation">
+      <p><strong>Giải thích:</strong></p>
+      <p>
+        Mẫu Pub-Sub cho phép mở rộng theo chiều ngang:
+      </p>
+      <ol>
+        <li>Có thể chạy nhiều instance của API (publishers)</li>
+        <li>Có thể chạy nhiều instance của consumer service</li>
+        <li>Kafka tự động phân phối messages giữa các consumer trong cùng một consumer group</li>
+        <li>Consumer groups cho phép xử lý song song mà không bị trùng lặp</li>
+      </ol>
+      <p><strong>Lợi ích:</strong></p>
+      <ul>
+        <li>Tăng throughput của hệ thống</li>
+        <li>Cải thiện fault tolerance</li>
+        <li>Cho phép zero-downtime deployment</li>
+        <li>Phân tán tải trên nhiều server</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      securityLevel: 'loose',
+      fontFamily: 'Arial',
+      fontSize: 14,
+      flowchart: {
+        htmlLabels: true
+      },
+      sequence: {
+        showSequenceNumbers: false,
+        actorMargin: 80,
+        messageMargin: 40
+      }
+    });
+  </script>
+</body>
+</html>
