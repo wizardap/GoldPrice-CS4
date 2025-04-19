@@ -13,7 +13,7 @@ const apiLimiter = rateLimit({
 });
 
 // Các routes cho API
-router.post('/add', apiLimiter, goldPriceController.addPrice);
+router.post('/add', goldPriceController.addPrice);
 router.get('/get/:id', goldPriceController.getLatestPrice);
 router.get('/history/:id', goldPriceController.getPriceHistory);
 router.get('/vendors', goldPriceController.getVendorsList);

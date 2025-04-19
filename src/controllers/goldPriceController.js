@@ -14,11 +14,13 @@ const CACHE_TTL = 60; // seconds
 exports.addPrice = async (req, res) => {
   try {
     const { key, value } = req.body;
+    // Convert key to lowercase for consistency
+    const normalizedKey = key ? key.toLowerCase() : key;
 
-    if (!key || !value || !Array.isArray(value) || value.length === 0) { // Kiểm tra mảng không rỗng
+    if (!normalizedKey || !value || !Array.isArray(value) || value.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Dữ liệu không hợp lệ. Yêu cầu key và mảng value không rỗng.'
+        message: `Dữ liệu không hợp lệ. Yêu cầu key và mảng value không rỗng. ${normalizedKey}:${value}`
       });
     }
 
@@ -35,20 +37,20 @@ exports.addPrice = async (req, res) => {
     }
     // --- Kết thúc Validation ---
 
-    // Lưu vào database
+    // Lưu vào database với key đã được chuyển thành lowercase
     const newPrice = new GoldPrice({
-      keyID: key,
+      keyID: normalizedKey,
       products: value, // Dữ liệu đã được validate cơ bản
       timestamp: new Date()
     });
 
     await newPrice.save();
-    logger.info(`Lưu dữ liệu giá vàng thành công cho key: ${key}`);
+    logger.info(`Lưu dữ liệu giá vàng thành công cho key: ${normalizedKey}`);
 
     // Lưu vào cache 
     try {
-      await cache.setCache(`${CACHE_KEY_PREFIX}${key}`, {
-        key: key,
+      await cache.setCache(`${CACHE_KEY_PREFIX}${normalizedKey}`, {
+        key: normalizedKey,
         value: value,
         timestamp: newPrice.timestamp
       }, CACHE_TTL);
@@ -61,7 +63,7 @@ exports.addPrice = async (req, res) => {
       // Áp dụng retry ở đây (một nơi duy nhất)
       await retryWithExponentialBackoff(async () => {
         const result = await kafka.publishMessage({
-          key: key,
+          key: normalizedKey,
           type: 'PRICE_UPDATED',
           value: value,
           timestamp: newPrice.timestamp
@@ -81,7 +83,7 @@ exports.addPrice = async (req, res) => {
       success: true,
       message: 'Thêm giá vàng thành công',
       data: {
-        key,
+        key: normalizedKey,
         timestamp: newPrice.timestamp
       }
     });
@@ -97,7 +99,8 @@ exports.addPrice = async (req, res) => {
  */
 exports.getLatestPrice = async (req, res) => {
   try {
-    const keyID = req.params.id;
+    // Convert keyID to lowercase for consistency
+    const keyID = req.params.id.toLowerCase();
 
     // Kiểm tra cache trước
     const cachedData = await cache.getCache(`${CACHE_KEY_PREFIX}${keyID}`);
@@ -148,7 +151,8 @@ exports.getLatestPrice = async (req, res) => {
  */
 exports.getPriceHistory = async (req, res) => {
   try {
-    const { id } = req.params;
+    // Convert id to lowercase for consistency
+    const id = req.params.id.toLowerCase();
     const { from, to, limit = 100 } = req.query;
 
     // Chuyển đổi chuỗi thời gian thành đối tượng Date

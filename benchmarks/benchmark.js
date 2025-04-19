@@ -256,20 +256,20 @@ async function runBenchmark() {
   
   try {
     // Test các API endpoint
-    await benchmarkEndpoint('/api/vendors', 'GET');
-    await benchmarkEndpoint('/api/get/vendor1', 'GET');
+    await benchmarkEndpoint('/vendors', 'GET');
+    await benchmarkEndpoint('/get/vendor1', 'GET');
     
     // Khởi tạo dữ liệu để test
     console.log('\nTạo dữ liệu benchmark...');
-    await axios.post(`${config.baseUrl}/api/add`, generateMockData('benchmark-vendor'));
+    await axios.post(`${config.baseUrl}/add`, generateMockData('benchmark-vendor'));
     
     // Test thêm giá vàng
     for (let i = 0; i < config.dataPoints; i++) {
-      await benchmarkEndpoint('/api/add', 'POST', generateMockData('benchmark-vendor'));
+      await benchmarkEndpoint('/add', 'POST', generateMockData('benchmark-vendor'));
     }
     
     // Test lấy lịch sử giá
-    await benchmarkEndpoint('/api/history/benchmark-vendor', 'GET');
+    await benchmarkEndpoint('/history/benchmark-vendor', 'GET');
     
     // Test Socket.IO
     await benchmarkSocketIO('benchmark-vendor');

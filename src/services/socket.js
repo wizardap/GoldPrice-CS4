@@ -18,23 +18,26 @@ const initializeSocketIO = (server) => {
   // Xử lý kết nối socket
   io.on('connection', (socket) => {
     logger.info(`Client connected: ${socket.id}`);
-    
+
     // Đăng ký client vào room theo keyID
     socket.on('join', (keyID) => {
       if (!keyID) return;
-      
-      socket.join(keyID);
-      logger.info(`Client ${socket.id} joined room: ${keyID}`);
-      
+
+      // Convert keyID to lowercase for consistency
+      const normalizedKeyID = keyID.toLowerCase();
+
+      socket.join(normalizedKeyID);
+      logger.info(`Client ${socket.id} joined room: ${normalizedKeyID}`);
+
       // Gửi thông báo xác nhận đã tham gia phòng
-      socket.emit('joined', { room: keyID, success: true });
+      socket.emit('joined', { room: normalizedKeyID, success: true });
     });
-    
+
     // Xử lý client ngắt kết nối
     socket.on('disconnect', () => {
       logger.info(`Client disconnected: ${socket.id}`);
     });
-    
+
     // Xử lý lỗi socket
     socket.on('error', (error) => {
       logger.error(`Socket error: ${error.message}`, { socketId: socket.id });
@@ -51,15 +54,18 @@ const emitPriceUpdate = (keyID, data) => {
     logger.error('Socket.IO not initialized');
     return false;
   }
-  
+
+  // Convert keyID to lowercase for consistency
+  const normalizedKeyID = keyID.toLowerCase();
+
   // Gửi đến tất cả client trong room keyID
-  io.to(keyID).emit('priceUpdate', {
-    key: keyID,
+  io.to(normalizedKeyID).emit('priceUpdate', {
+    key: normalizedKeyID,
     value: data.value || data.products,
     timestamp: data.timestamp || new Date()
   });
-  
-  logger.info(`Price update emitted to room: ${keyID}`);
+
+  logger.info(`Price update emitted to room: ${normalizedKeyID}`);
   return true;
 };
 
@@ -69,7 +75,7 @@ const emitError = (socketId, error) => {
     logger.error('Socket.IO not initialized');
     return false;
   }
-  
+
   io.to(socketId).emit('error', { message: error.message || error });
   logger.info(`Error emitted to socket: ${socketId}`);
   return true;
@@ -81,7 +87,7 @@ const getClientsCount = async (room) => {
     logger.error('Socket.IO not initialized');
     return 0;
   }
-  
+
   const sockets = await io.in(room).fetchSockets();
   return sockets.length;
 };

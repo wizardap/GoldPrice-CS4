@@ -29,8 +29,8 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// API Routes
-app.use('/api', goldPriceRoutes);
+// API Routes - Bỏ tiền tố '/api'
+app.use('/', goldPriceRoutes);
 
 // Viewer route - Hiển thị giá vàng
 app.get('/viewer/:id', (req, res) => {
@@ -39,7 +39,7 @@ app.get('/viewer/:id', (req, res) => {
 
 // Trang chủ
 app.get('/', (req, res) => {
-  res.redirect('/api/vendors'); // Redirect về API hiển thị danh sách vendors
+  res.redirect('/vendors'); // Redirect về API hiển thị danh sách vendors đã bỏ '/api'
 });
 
 // Xử lý lỗi 404
@@ -64,17 +64,17 @@ async function startServer() {
   try {
     // Kết nối MongoDB
     await connectDB();
-    
+
     // Kết nối Redis (nếu có lỗi vẫn chạy tiếp)
     await connectRedis().catch(err => {
       logger.warn(`Khởi động không có Redis: ${err.message}`);
     });
-    
+
     // Kết nối Kafka và đăng ký consumer
     await connectKafka().catch(err => {
       logger.warn(`Khởi động không có Kafka: ${err.message}`);
     });
-    
+
     // Đăng ký handler xử lý message nhận được từ Kafka
     await consumeMessages(async (message) => {
       try {
@@ -88,13 +88,13 @@ async function startServer() {
     }).catch(err => {
       logger.warn(`Không thể đăng ký Kafka consumer: ${err.message}`);
     });
-    
+
     // Khởi động server
     const port = config.app.port;
     server.listen(port, () => {
       logger.info(`Server đang chạy ở cổng ${port} trong môi trường ${config.app.env}`);
     });
-    
+
   } catch (error) {
     logger.error(`Không thể khởi động server: ${error.message}`);
     process.exit(1);
