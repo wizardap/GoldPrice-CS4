@@ -35,7 +35,7 @@ class CacheService {
 
   async set(key, value) {
     if (!this.connected) return;
-    
+
     try {
       const fullKey = `${this.keyPrefix}${key}`;
       await this.client.set(fullKey, JSON.stringify(value), {
@@ -50,7 +50,7 @@ class CacheService {
 
   async get(key) {
     if (!this.connected) return null;
-    
+
     try {
       const fullKey = `${this.keyPrefix}${key}`;
       const data = await this.client.get(fullKey);

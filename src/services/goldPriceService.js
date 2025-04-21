@@ -48,17 +48,17 @@ class GoldPriceService {
       // Connect to database
       await this.sequelize.authenticate();
       console.log('Database connection established.');
-      
+
       // Sync models with database
       await this.sequelize.sync();
       console.log('Database models synchronized.');
-      
+
       // Initialize cache service
       await cacheService.connect();
-      
+
       // Initialize Kafka producer
       await kafkaService.connectProducer();
-      
+
       this.initialized = true;
     } catch (error) {
       console.error('Failed to initialize GoldPriceService:', error);
@@ -88,7 +88,7 @@ class GoldPriceService {
           // Sử dụng upsert thay vì findOrCreate
           return this.GoldPrice.upsert(goldPriceData);
         })(),
-        
+
         // Cache operation
         cacheService.set(type, {
           buy: priceData.buy,
@@ -97,7 +97,7 @@ class GoldPriceService {
           updated_at: priceData.updated_at || new Date().toISOString()
         })
       ]);
-      
+
       // Kafka operation không blocking request
       kafkaService.publishGoldPriceUpdate({
         type,
@@ -158,7 +158,7 @@ class GoldPriceService {
   async getGoldPriceHistory(type, startTime, endTime, limit = 100) {
     try {
       const query = { where: { type } };
-      
+
       if (startTime && endTime) {
         query.where.timestamp = {
           [Sequelize.Op.between]: [new Date(startTime), new Date(endTime)]
@@ -196,7 +196,7 @@ class GoldPriceService {
       const types = await this.GoldPrice.findAll({
         attributes: [[Sequelize.fn('DISTINCT', Sequelize.col('type')), 'type']]
       });
-      
+
       return types.map(t => t.type);
     } catch (error) {
       console.error('Error getting all gold types:', error);

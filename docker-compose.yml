@@ -68,10 +68,10 @@ services:
     environment:
       KAFKA_ADVERTISED_HOST_NAME: kafka
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_CREATE_TOPICS: "gold-price-updates:6:1"  # format: topic_name:partitions:replicas
+      KAFKA_CREATE_TOPICS: "gold-price-updates:6:1" # format: topic_name:partitions:replicas
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_NUM_PARTITIONS: "6"  # Default số partition cho topics tự động tạo
-      KAFKA_DEFAULT_REPLICATION_FACTOR: "1"  # Replica factor cho dev
+      KAFKA_NUM_PARTITIONS: "6" # Default số partition cho topics tự động tạo
+      KAFKA_DEFAULT_REPLICATION_FACTOR: "1" # Replica factor cho dev
     depends_on:
       - zookeeper
     volumes:
