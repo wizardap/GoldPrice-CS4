@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gold Price Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .price-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .price-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .price-label {
+            font-weight: bold;
+        }
+        .price-value {
+            color: #e67e22;
+            font-weight: bold;
+        }
+        .timestamp {
+            color: #7f8c8d;
+            font-size: 0.9em;
+            text-align: right;
+            margin-top: 10px;
+        }
+        .connection-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.8em;
+        }
+        .connected {
+            background-color: #2ecc71;
+            color: white;
+        }
+        .disconnected {
+            background-color: #e74c3c;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div id="connection-status" class="connection-status disconnected">Disconnected</div>
+    <h1>Gold Price Viewer</h1>
+    <div id="price-container" class="price-card">
+        <h2 id="gold-type">Loading...</h2>
+        <div class="price-row">
+            <span class="price-label">Buy Price:</span>
+            <span id="buy-price" class="price-value">--</span>
+        </div>
+        <div class="price-row">
+            <span class="price-label">Sell Price:</span>
+            <span id="sell-price" class="price-value">--</span>
+        </div>
+        <div class="price-row">
+            <span class="price-label">Unit:</span>
+            <span id="unit">--</span>
+        </div>
+        <div id="timestamp" class="timestamp">--</div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // Parse the gold type from the URL
+        const locationPath = window.location.pathname.split("/");
+        const goldType = locationPath[locationPath.length - 1];
+        
+        // Update page title with gold type
+        document.title = `${goldType} Gold Price`;
+        document.getElementById('gold-type').textContent = `${goldType} Gold Price`;
+
+        // Format price with commas for thousands
+        function formatPrice(price) {
+            return new Intl.NumberFormat('vi-VN').format(price);
+        }
+
+        // Format timestamp to a readable format
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleString();
+        }
+
+        // Update the UI with gold price data
+        function updateUI(data) {
+            if (!data || !data[goldType]) return;
+
+            const priceData = data[goldType];
+            
+            document.getElementById('buy-price').textContent = formatPrice(priceData.buy);
+            document.getElementById('sell-price').textContent = formatPrice(priceData.sell);
+            document.getElementById('unit').textContent = priceData.unit;
+            document.getElementById('timestamp').textContent = `Last updated: ${formatTimestamp(priceData.updated_at)}`;
+        }
+
+        // Initial fetch to get the latest price
+        async function fetchInitialPrice() {
+            try {
+                const response = await fetch(`/get/${goldType}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    updateUI({ [goldType]: data });
+                } else {
+                    console.error('Failed to fetch initial gold price');
+                }
+            } catch (error) {
+                console.error('Error fetching initial gold price:', error);
+            }
+        }
+
+        // Connect to Socket.IO for real-time updates
+        const socket = io();
+        
+        // Handle connection status
+        const connectionStatus = document.getElementById('connection-status');
+        
+        socket.on('connect', () => {
+            connectionStatus.textContent = 'Connected';
+            connectionStatus.className = 'connection-status connected';
+            
+            // Subscribe to gold price updates
+            socket.emit('subscribe', goldType);
+        });
+        
+        socket.on('disconnect', () => {
+            connectionStatus.textContent = 'Disconnected';
+            connectionStatus.className = 'connection-status disconnected';
+        });
+        
+        // Handle gold price updates
+        socket.on('goldPriceUpdate', (data) => {
+            console.log('Received gold price update:', data);
+            updateUI(data);
+        });
+        
+        // Fetch initial price in case the socket is not yet connected
+        fetchInitialPrice();
+    </script>
+</body>
+</html>
