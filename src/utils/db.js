@@ -2,9 +2,17 @@ const mongoose = require('mongoose');
 const config = require('../config');
 const logger = require('./logger');
 const { CircuitBreaker } = require('./circuitBreaker');
-const { retryWithExponentialBackoff } = require('./retry'); // <--- Thêm dòng này
+const { retryWithExponentialBackoff } = require('./retry');
 
-// Kết nối MongoDB
+/**
+ * Thiết lập kết nối đến MongoDB với cơ chế retry
+ * @returns {Promise<boolean>} - Kết quả của quá trình kết nối (true: thành công)
+ * @description 
+ * Kết nối đến MongoDB với cơ chế retry theo exponential backoff.
+ * Cấu hình Mongoose với các tham số tối ưu cho reconnect tự động.
+ * Thêm các event handler để xử lý các trường hợp disconnected và reconnected.
+ * Nếu kết nối thất bại sau số lần retry tối đa, ứng dụng sẽ thoát vì đây là thành phần quan trọng.
+ */
 const connectDB = async () => {
   return retryWithExponentialBackoff(
     async () => {
@@ -40,9 +48,21 @@ const connectDB = async () => {
   });
 };
 
-// Đây là một trường hợp đặc biệt - Circuit Breaker cho DB query
-// Chú ý: Nên được áp dụng cẩn thận để không ảnh hưởng dữ liệu quan trọng
+/**
+ * Circuit Breaker được cấu hình riêng cho các thao tác truy vấn MongoDB
+ * @description
+ * Circuit breaker dành riêng cho các thao tác truy vấn database, với ngưỡng 
+ * lỗi cao hơn các circuit breaker khác vì database là thành phần quan trọng.
+ * Được thiết kế để bảo vệ MongoDB khỏi quá tải khi xảy ra sự cố, 
+ * nhưng vẫn đảm bảo dịch vụ có thể phục hồi nhanh chóng.
+ */
 const dbCircuitBreaker = new CircuitBreaker(
+  /**
+   * Thực thi một database operation với các tham số truyền vào
+   * @param {Function} operation - Database operation cần thực thi (thường là một query method)
+   * @param {...any} args - Các tham số cho operation
+   * @returns {Promise<any>} - Kết quả của database operation
+   */
   async (operation, ...args) => await operation(...args),
   {
     name: 'mongodb-queries',

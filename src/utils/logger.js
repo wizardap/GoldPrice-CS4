@@ -1,7 +1,15 @@
 const winston = require('winston');
 const config = require('../config');
 
-// Tạo logger instance với winston
+/**
+ * Tạo logger instance với winston để quản lý logs trong ứng dụng
+ * @description
+ * Cấu hình logger với nhiều transports khác nhau:
+ * - Console transport: Hiển thị logs với màu sắc trên console để dễ đọc
+ * - File transport (error.log): Ghi lại các errors vào file riêng
+ * - File transport (combined.log): Ghi tất cả các logs vào một file tổng hợp
+ * Format logs bao gồm timestamp, level, và message với stack trace cho errors
+ */
 const logger = winston.createLogger({
   level: config.logging.level,
   format: winston.format.combine(
@@ -27,9 +35,14 @@ const logger = winston.createLogger({
   ]
 });
 
-// Thêm log stream cho HTTP requests
+/**
+ * Stream interface cho morgan HTTP request logger
+ * @description
+ * Cho phép morgan HTTP request logger sử dụng winston logger
+ * để ghi lại tất cả HTTP requests vào cùng một hệ thống logging
+ */
 logger.stream = {
-  write: function(message) {
+  write: function (message) {
     logger.info(message.trim());
   }
 };

@@ -40,7 +40,12 @@ const consumer = kafka.consumer({
 let messageBuffer = [];
 let bufferTimer = null;
 
-// Flush buffer và gửi messages theo batch
+/**
+ * Flush buffer và gửi messages theo batch vào Kafka
+ * @returns {Promise<void>}
+ * @description Gửi tất cả messages đã được lưu trong buffer vào Kafka theo batch.
+ * Nếu batch fails, thử gửi lại từng message riêng lẻ để tránh mất dữ liệu.
+ */
 const flushMessageBuffer = async () => {
   if (messageBuffer.length === 0) return;
 
@@ -71,6 +76,11 @@ const flushMessageBuffer = async () => {
 
 // Khởi tạo circuit breaker cho Kafka producer
 const producerCircuitBreaker = new CircuitBreaker(
+  /**
+   * Hàm gửi message vào Kafka thông qua producer
+   * @param {Object} message - Message cần gửi vào Kafka
+   * @returns {Promise<Object>} - Kết quả từ Kafka producer
+   */
   async (message) => {
     // Khi dùng circuit breaker, gửi message trực tiếp không qua buffer
     return await producer.send({
@@ -92,7 +102,13 @@ const producerCircuitBreaker = new CircuitBreaker(
   }
 );
 
-// Gửi message vào Dead Letter Queue
+/**
+ * Gửi message vào Dead Letter Queue khi xử lý thất bại
+ * @param {Object} message - Message gốc không thể xử lý được
+ * @param {Error} error - Lỗi xảy ra khi xử lý message
+ * @returns {Promise<boolean>} - Kết quả của quá trình gửi DLQ (true: thành công, false: thất bại)
+ * @description Ghi lại message gốc, lỗi và timestamp vào Dead Letter Queue để xử lý sau
+ */
 const sendToDeadLetterQueue = async (message, error) => {
   try {
     await deadLetterProducer.send({
@@ -118,7 +134,12 @@ const sendToDeadLetterQueue = async (message, error) => {
   }
 };
 
-// Kết nối Kafka
+/**
+ * Kết nối đến các thành phần Kafka (producer, consumer, DLQ producer)
+ * @returns {Promise<boolean>} - Kết quả của quá trình kết nối (true: thành công, false: thất bại)
+ * @description Thiết lập kết nối đến Kafka broker, khởi tạo producer và consumer
+ * với cơ chế retry trong trường hợp kết nối thất bại ban đầu
+ */
 const connectKafka = async () => {
   return retryWithExponentialBackoff(async () => {
     try {
@@ -150,7 +171,13 @@ const connectKafka = async () => {
   );
 };
 
-// Publish message vào Kafka topic
+/**
+ * Đẩy message vào Kafka topic, hỗ trợ batching và circuit breaker
+ * @param {Object} message - Message cần publish, bao gồm key và value
+ * @returns {Promise<boolean>} - Kết quả của quá trình publish (true: thành công, false: thất bại/circuit open)
+ * @description Publish message vào Kafka topic với cơ chế batching nếu được cấu hình, hoặc
+ * sử dụng circuit breaker để hạn chế lỗi cascade khi broker gặp vấn đề
+ */
 const publishMessage = async (message) => {
   try {
     // Nếu batching được bật (lingerMs > 0), thêm message vào buffer
@@ -190,7 +217,13 @@ const publishMessage = async (message) => {
   }
 };
 
-// Đăng ký consumer với handler function
+/**
+ * Đăng ký consumer với handler function để xử lý message
+ * @param {Function} messageHandler - Hàm xử lý message nhận được từ Kafka
+ * @returns {Promise<boolean>} - Kết quả của quá trình đăng ký consumer (true: thành công, false: thất bại)
+ * @description Khởi chạy Kafka consumer để lắng nghe và xử lý message từ topic đã đăng ký.
+ * Hỗ trợ xử lý batch message để tối ưu hiệu năng và hạn chế số lần commit offset.
+ */
 const consumeMessages = async (messageHandler) => {
   try {
     await consumer.run({
@@ -237,7 +270,12 @@ const consumeMessages = async (messageHandler) => {
   }
 };
 
-// Lấy các thông số metric của Kafka
+/**
+ * Lấy thông tin metrics của Kafka để giám sát hệ thống
+ * @returns {Promise<Object>} - Các metrics như topic offsets, consumer offsets, lag và buffer size
+ * @description Thu thập các thông số metrics của Kafka như topic offsets, consumer offsets,
+ * lag giữa producer và consumer, cũng như kích thước buffer hiện tại.
+ */
 const getKafkaMetrics = async () => {
   try {
     const admin = kafka.admin();
@@ -276,7 +314,12 @@ const getKafkaMetrics = async () => {
   }
 };
 
-// Đóng kết nối Kafka
+/**
+ * Đóng kết nối đến Kafka một cách an toàn
+ * @returns {Promise<boolean>} - Kết quả của quá trình đóng kết nối (true: thành công, false: thất bại)
+ * @description Đóng kết nối với Kafka một cách an toàn, đảm bảo tất cả message trong buffer
+ * được flush và các kết nối được dọn dẹp đúng cách
+ */
 const disconnectKafka = async () => {
   try {
     // Flush bất kỳ messages còn lại trong buffer

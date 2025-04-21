@@ -3,7 +3,13 @@ const logger = require('../utils/logger');
 
 let io;
 
-// Khởi tạo Socket.IO server
+/**
+ * Khởi tạo Socket.IO server với cấu hình tối ưu
+ * @param {Object} server - HTTP server instance để gắn Socket.IO
+ * @returns {Object} - Socket.IO server instance đã khởi tạo
+ * @description Khởi tạo Socket.IO server với các cấu hình CORS, transport, timeout
+ * và kích thước buffer. Thiết lập các event handler cho connection, join, disconnect và error.
+ */
 const initializeSocketIO = (server) => {
   io = socketIo(server, {
     cors: {
@@ -19,7 +25,10 @@ const initializeSocketIO = (server) => {
   io.on('connection', (socket) => {
     logger.info(`Client connected: ${socket.id}`);
 
-    // Đăng ký client vào room theo keyID
+    /**
+     * Event handler cho sự kiện 'join'
+     * Cho phép client tham gia vào room để nhận cập nhật giá từ một vendor cụ thể
+     */
     socket.on('join', (keyID) => {
       if (!keyID) return;
 
@@ -33,12 +42,18 @@ const initializeSocketIO = (server) => {
       socket.emit('joined', { room: normalizedKeyID, success: true });
     });
 
-    // Xử lý client ngắt kết nối
+    /**
+     * Event handler cho sự kiện 'disconnect'
+     * Ghi log khi client ngắt kết nối
+     */
     socket.on('disconnect', () => {
       logger.info(`Client disconnected: ${socket.id}`);
     });
 
-    // Xử lý lỗi socket
+    /**
+     * Event handler cho sự kiện 'error'
+     * Ghi log khi xảy ra lỗi socket
+     */
     socket.on('error', (error) => {
       logger.error(`Socket error: ${error.message}`, { socketId: socket.id });
     });
@@ -48,7 +63,13 @@ const initializeSocketIO = (server) => {
   return io;
 };
 
-// Gửi cập nhật giá đến các client đang theo dõi keyID
+/**
+ * Gửi cập nhật giá đến các client đang theo dõi vendor (keyID)
+ * @param {string} keyID - ID của vendor cần gửi cập nhật
+ * @param {Object} data - Dữ liệu giá vàng được cập nhật
+ * @returns {boolean} - Kết quả của việc gửi cập nhật (true: thành công, false: thất bại)
+ * @description Gửi dữ liệu cập nhật giá vàng tới tất cả client trong room tương ứng với keyID
+ */
 const emitPriceUpdate = (keyID, data) => {
   if (!io) {
     logger.error('Socket.IO not initialized');
@@ -69,7 +90,13 @@ const emitPriceUpdate = (keyID, data) => {
   return true;
 };
 
-// Gửi thông báo lỗi đến client cụ thể
+/**
+ * Gửi thông báo lỗi đến một client cụ thể
+ * @param {string} socketId - ID của socket client cần gửi thông báo lỗi
+ * @param {Error|string} error - Lỗi hoặc thông báo lỗi cần gửi
+ * @returns {boolean} - Kết quả của việc gửi thông báo (true: thành công, false: thất bại)
+ * @description Gửi thông báo lỗi đến một client cụ thể dựa trên socketId
+ */
 const emitError = (socketId, error) => {
   if (!io) {
     logger.error('Socket.IO not initialized');
@@ -81,7 +108,12 @@ const emitError = (socketId, error) => {
   return true;
 };
 
-// Lấy số lượng client đang kết nối trong một room
+/**
+ * Lấy số lượng client đang kết nối trong một room
+ * @param {string} room - Tên của room cần kiểm tra
+ * @returns {number} - Số lượng client đang kết nối trong room
+ * @description Đếm và trả về số lượng client đang kết nối trong một room cụ thể
+ */
 const getClientsCount = async (room) => {
   if (!io) {
     logger.error('Socket.IO not initialized');

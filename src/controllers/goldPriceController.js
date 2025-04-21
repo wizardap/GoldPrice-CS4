@@ -10,6 +10,17 @@ const CACHE_TTL = 60; // seconds
 
 /**
  * Thêm/cập nhật giá vàng mới
+ * @route POST /price
+ * @param {Object} req.body.key - Định danh của vendor (người bán vàng)
+ * @param {Array} req.body.value - Mảng các sản phẩm vàng với giá mua/bán
+ * @returns {Object} - Kết quả cập nhật với timestamp
+ * @description
+ * Thêm một bản ghi giá vàng mới vào hệ thống:
+ * 1. Validate dữ liệu đầu vào (kiểm tra key, giá mua/bán, loại sản phẩm)
+ * 2. Lưu vào database
+ * 3. Xóa cache liên quan để đảm bảo dữ liệu mới nhất
+ * 4. Lưu vào cache để truy vấn nhanh
+ * 5. Gửi message qua Kafka để thông báo cho các service khác
  */
 exports.addPrice = async (req, res) => {
   try {
@@ -99,6 +110,14 @@ exports.addPrice = async (req, res) => {
 
 /**
  * Lấy giá vàng mới nhất theo key
+ * @route GET /price/:id
+ * @param {string} req.params.id - Định danh của vendor (keyID)
+ * @returns {Object} - Dữ liệu giá vàng mới nhất với nguồn (cache/database)
+ * @description
+ * Lấy giá vàng mới nhất của một vendor theo keyID:
+ * 1. Kiểm tra trong cache trước để tối ưu hiệu năng
+ * 2. Nếu không có trong cache, truy vấn database
+ * 3. Lưu kết quả vào cache để các truy vấn sau nhanh hơn
  */
 exports.getLatestPrice = async (req, res) => {
   try {
@@ -151,15 +170,31 @@ exports.getLatestPrice = async (req, res) => {
 
 /**
  * Lấy lịch sử giá vàng theo key và khoảng thời gian
+ * @route GET /price/:id/history
+ * @param {string} req.params.id - Định danh của vendor (keyID)
+ * @param {string} req.query.from - Thời gian bắt đầu (ISO format)
+ * @param {string} req.query.to - Thời gian kết thúc (ISO format)
+ * @param {number} req.query.limit - Số lượng kết quả tối đa (mặc định: 20)
+ * @param {number} req.query.page - Trang kết quả (mặc định: 1)
+ * @returns {Object} - Mảng dữ liệu lịch sử giá vàng với nguồn (cache/database)
+ * @description
+ * Lấy lịch sử giá vàng của một vendor theo khoảng thời gian:
+ * 1. Tạo cache key dựa vào tham số truy vấn
+ * 2. Kiểm tra thời gian cập nhật gần nhất
+ * 3. Nếu có cập nhật mới, truy vấn database và làm mới cache
+ * 4. Cache có TTL khác nhau tùy thuộc vào độ mới của dữ liệu:
+ *    - Dữ liệu cũ hơn 1 ngày: 1 giờ
+ *    - Dữ liệu từ 1 giờ đến 1 ngày: 3 phút
+ *    - Dữ liệu dưới 1 giờ: 1 phút
  */
 exports.getPriceHistory = async (req, res) => {
   try {
     const id = req.params.id.toLowerCase();
     const { from, to, limit = 20, page = 1 } = req.query;
-    
+
     // Tạo cache key dựa vào params
     const cacheKey = `history:${id}:${from || 'null'}:${to || 'null'}:${limit}:${page}`;
-    
+
     // Cache thông tin về lần cập nhật cuối thay vì toàn bộ lịch sử
     const lastUpdateKey = `lastUpdate:${id}`;
     await cache.setCache(lastUpdateKey, { timestamp: new Date() }, 3600);
@@ -212,7 +247,7 @@ exports.getPriceHistory = async (req, res) => {
         ttl = 60; // 1 phút cho dữ liệu rất mới (dưới 1 giờ)
       }
       await cache.setCache(cacheKey, result, ttl);
-      
+
       res.status(200).json({
         success: true,
         count: result.length,
@@ -229,6 +264,11 @@ exports.getPriceHistory = async (req, res) => {
 
 /**
  * Lấy danh sách các vendor (key) có trong hệ thống
+ * @route GET /vendors
+ * @returns {Object} - Mảng các keyID (vendor) trong hệ thống
+ * @description
+ * Lấy danh sách tất cả các vendor (keyIDs) có trong hệ thống.
+ * Sử dụng MongoDB distinct operator để lấy danh sách duy nhất các keyID.
  */
 exports.getVendorsList = async (req, res) => {
   try {

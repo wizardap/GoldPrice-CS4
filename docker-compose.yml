@@ -1,63 +1,77 @@
+# Cấu hình Docker Compose cho ứng dụng Giá Vàng
+# File này định nghĩa tất cả các dịch vụ cần thiết để chạy toàn bộ hệ thống ứng dụng
+
 services:
   # Ứng dụng NodeJS
+  # Xây dựng và chạy ứng dụng backend cho hệ thống Giá Vàng
   app:
     build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: goldprice-app
-    restart: unless-stopped
+      context: . # Sử dụng thư mục hiện tại làm ngữ cảnh build
+      dockerfile: Dockerfile # Sử dụng Dockerfile trong thư mục hiện tại
+    container_name: goldprice-app # Tên container
+    restart: unless-stopped # Tự động khởi động lại container trừ khi bị dừng thủ công
     ports:
-      - "8080:8080"
+      - "8080:8080" # Ánh xạ cổng 8080 của container với cổng 8080 của máy chủ
     depends_on:
-      - mongodb
-      - kafka
-      - redis
+      # Đảm bảo các dịch vụ này được khởi động trước ứng dụng
+      - mongodb # Phụ thuộc vào cơ sở dữ liệu
+      - kafka1 # Phụ thuộc vào message broker
+      - kafka2 # Phụ thuộc vào message broker
+      - kafka3 # Phụ thuộc vào message broker
+      - redis # Phụ thuộc vào bộ nhớ đệm
     environment:
-      - PORT=8080
-      - NODE_ENV=development
-      - MONGODB_URI=mongodb://mongodb:27017/goldprice
-      - KAFKA_BROKERS=kafka:9092
-      - KAFKA_CLIENT_ID=gold-price-app
-      - KAFKA_TOPIC=gold-price-updates
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      # Các biến môi trường để cấu hình ứng dụng
+      - PORT=8080 # Cổng ứng dụng
+      - NODE_ENV=development # Chế độ môi trường phát triển
+      - MONGODB_URI=mongodb://mongodb:27017/goldprice # Chuỗi kết nối MongoDB
+      - KAFKA_BROKERS=kafka1:9092,kafka2:9092,kafka3:9092 # Địa chỉ của Kafka broker
+      - KAFKA_CLIENT_ID=gold-price-app # Định danh Kafka client
+      - KAFKA_TOPIC=gold-price-updates # Chủ đề Kafka cho cập nhật giá vàng
+      - REDIS_HOST=redis # Máy chủ Redis
+      - REDIS_PORT=6379 # Cổng Redis
     volumes:
-      - .:/app
-      - /app/node_modules
+      - .:/app # Gắn kết thư mục hiện tại vào /app trong container
+      - /app/node_modules # Sử dụng node_modules của container (tránh ghi đè)
     networks:
-      - goldprice-network
+      - goldprice-network # Kết nối với mạng ứng dụng
 
-  # Cơ sở dữ liệu MongoDB
+  # Dịch vụ Cơ sở dữ liệu MongoDB
+  # Lưu trữ dữ liệu bền vững cho ứng dụng
   mongodb:
-    image: mongo:latest
-    container_name: goldprice-mongodb
-    restart: unless-stopped
+    image: mongo:latest # Sử dụng image MongoDB mới nhất
+    container_name: goldprice-mongodb # Tên container
+    restart: unless-stopped # Tự động khởi động lại để đảm bảo tính sẵn sàng cao
     ports:
-      - "27017:27017"
+      - "27017:27017" # Mở cổng MongoDB
     volumes:
-      - mongodb_data:/data/db
+      - mongodb_data:/data/db # Lưu trữ dữ liệu cơ sở dữ liệu bằng volume có tên
     networks:
-      - goldprice-network
+      - goldprice-network # Kết nối với mạng ứng dụng
 
-  # Zookeeper (cần thiết cho Kafka)
+  # Dịch vụ ZooKeeper
+  # Cần thiết cho sự phối hợp và quản lý của Kafka broker
   zookeeper:
-    image: wurstmeister/zookeeper:latest
-    container_name: goldprice-zookeeper
+    image: wurstmeister/zookeeper:latest # Sử dụng image ZooKeeper mới nhất
+    container_name: goldprice-zookeeper # Tên container
     ports:
-      - "2181:2181"
+      - "2181:2181" # Mở cổng ZooKeeper client
     networks:
-      - goldprice-network
+      - goldprice-network # Kết nối với mạng ứng dụng
 
-  # Message Broker Kafka
-  kafka:
+  # Kafka Broker 1
+  kafka1:
     image: wurstmeister/kafka:latest
-    container_name: goldprice-kafka
+    container_name: goldprice-kafka1
     ports:
       - "9092:9092"
     environment:
-      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_BROKER_ID: 1
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_HOST_NAME: kafka1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_CREATE_TOPICS: "gold-price-updates:1:1"
+      KAFKA_CREATE_TOPICS: "gold-price-updates:4:2"  # Tăng lên 4 partitions, 2 replicas
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     depends_on:
       - zookeeper
     volumes:
@@ -65,24 +79,67 @@ services:
     networks:
       - goldprice-network
 
-  # Redis cho caching
-  redis:
-    image: redis:latest
-    container_name: goldprice-redis
-    restart: unless-stopped
+  # Kafka Broker 2
+  kafka2:
+    image: wurstmeister/kafka:latest
+    container_name: goldprice-kafka2
     ports:
-      - "6379:6379"
+      - "9093:9092"
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_HOST_NAME: kafka2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    depends_on:
+      - zookeeper
     volumes:
-      - redis_data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - goldprice-network
 
-# Volume để lưu trữ dữ liệu
-volumes:
-  mongodb_data:
-  redis_data:
+  # Kafka Broker 3
+  kafka3:
+    image: wurstmeister/kafka:latest
+    container_name: goldprice-kafka3
+    ports:
+      - "9094:9092"
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_HOST_NAME: kafka3
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    depends_on:
+      - zookeeper
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - goldprice-network
 
-    # Network để kết nối các dịch vụ
+  # Dịch vụ Redis Cache
+  # Cung cấp bộ nhớ đệm tốc độ cao để cải thiện hiệu suất ứng dụng
+  redis:
+    image: redis:latest 
+    container_name: goldprice-redis 
+    restart: unless-stopped # Tự động khởi động lại để đảm bảo tính sẵn sàng cao
+    ports:
+      - "6379:6379" # Mở cổng Redis
+    volumes:
+      - redis_data:/data # Lưu trữ dữ liệu Redis bằng volume có tên
+    networks:
+      - goldprice-network # Kết nối với mạng ứng dụng
+
+# Các volume có tên để lưu trữ dữ liệu bền vững
+# Những volume này giữ dữ liệu ngay cả khi containers bị xóa
+volumes:
+  mongodb_data: # Volume cho dữ liệu MongoDB
+  redis_data: # Volume cho dữ liệu Redis
+
+# Cấu hình mạng
+# Tạo mạng cô lập cho tất cả các dịch vụ giao tiếp
 networks:
   goldprice-network:
-    driver: bridge
+    driver: bridge # Sử dụng driver mạng bridge
