@@ -47,6 +47,9 @@ exports.addPrice = async (req, res) => {
     await newPrice.save();
     logger.info(`Lưu dữ liệu giá vàng thành công cho key: ${normalizedKey}`);
 
+    // Xóa cache lịch sử cho vendor này
+    await cache.deleteCachePattern(`history:${normalizedKey}:*`);
+
     // Lưu vào cache 
     try {
       await cache.setCache(`${CACHE_KEY_PREFIX}${normalizedKey}`, {
@@ -151,34 +154,72 @@ exports.getLatestPrice = async (req, res) => {
  */
 exports.getPriceHistory = async (req, res) => {
   try {
-    // Convert id to lowercase for consistency
     const id = req.params.id.toLowerCase();
-    const { from, to, limit = 100 } = req.query;
+    const { from, to, limit = 20, page = 1 } = req.query;
+    
+    // Tạo cache key dựa vào params
+    const cacheKey = `history:${id}:${from || 'null'}:${to || 'null'}:${limit}:${page}`;
+    
+    // Cache thông tin về lần cập nhật cuối thay vì toàn bộ lịch sử
+    const lastUpdateKey = `lastUpdate:${id}`;
+    await cache.setCache(lastUpdateKey, { timestamp: new Date() }, 3600);
 
-    // Chuyển đổi chuỗi thời gian thành đối tượng Date
-    const fromDate = from ? new Date(from) : null;
-    const toDate = to ? new Date(to) : null;
+    // Trong controller, kiểm tra xem có cập nhật mới không
+    const lastUpdate = await cache.getCache(lastUpdateKey);
+    const cachedData = await cache.getCache(cacheKey);
+    if (cachedData && lastUpdate && new Date(cachedData.timestamp) >= new Date(lastUpdate.timestamp)) {
+      // Cache vẫn hợp lệ
+      return res.status(200).json({
+        success: true,
+        count: cachedData.length,
+        data: cachedData,
+        source: 'cache'
+      });
+    } else {
+      // Làm mới cache
+      // Chuyển đổi chuỗi thời gian thành đối tượng Date
+      const fromDate = from ? new Date(from) : null;
+      const toDate = to ? new Date(to) : null;
 
-    // Lấy lịch sử từ database
-    const history = await GoldPrice.getHistoryByKey(
-      id,
-      fromDate,
-      toDate,
-      parseInt(limit)
-    );
+      // Lấy lịch sử từ database
+      const history = await GoldPrice.getHistoryByKey(
+        id,
+        fromDate,
+        toDate,
+        parseInt(limit)
+      );
 
-    // Chuyển đổi định dạng dữ liệu trả về
-    const result = history.map(item => ({
-      key: item.keyID,
-      value: item.products,
-      timestamp: item.timestamp
-    }));
+      // Chuyển đổi định dạng dữ liệu trả về
+      const result = history.map(item => ({
+        key: item.keyID,
+        value: item.products,
+        timestamp: item.timestamp
+      }));
 
-    res.status(200).json({
-      success: true,
-      count: result.length,
-      data: result
-    });
+      // Sử dụng TTL ngắn hơn cho dữ liệu gần đây
+      const now = new Date();
+      const oneDayAgo = new Date(now);
+      oneDayAgo.setDate(now.getDate() - 1);
+      const oneHourAgo = new Date(now);
+      oneHourAgo.setHours(now.getHours() - 1);
+
+      let ttl;
+      if (from && new Date(from) < oneDayAgo) {
+        ttl = 3600; // 1 giờ cho dữ liệu cũ hơn 1 ngày
+      } else if (from && new Date(from) < oneHourAgo) {
+        ttl = 180; // 3 phút cho dữ liệu từ 1 giờ đến 1 ngày
+      } else {
+        ttl = 60; // 1 phút cho dữ liệu rất mới (dưới 1 giờ)
+      }
+      await cache.setCache(cacheKey, result, ttl);
+      
+      res.status(200).json({
+        success: true,
+        count: result.length,
+        data: result,
+        source: 'database'
+      });
+    }
 
   } catch (error) {
     logger.error(`Lỗi khi lấy lịch sử giá vàng: ${error.message}`);

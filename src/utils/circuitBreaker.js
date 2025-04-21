@@ -1,3 +1,5 @@
+const logger = require('../utils/logger'); // hoặc đường dẫn đúng đến module logger
+
 class CircuitBreaker {
     constructor(fn, options = {}) {
         this.fn = fn;
@@ -61,4 +63,17 @@ class CircuitBreaker {
     }
 }
 
-module.exports = { CircuitBreaker };
+// Trong utils/circuitBreaker.js - cấu hình riêng cho history query
+const historyCircuitBreaker = new CircuitBreaker(
+  async (operation, ...args) => await operation(...args),
+  {
+    name: 'mongodb-history-queries',
+    failureThreshold: 3,       // Ngưỡng thấp hơn
+    resetTimeout: 5000,        // Thời gian ngắn hơn
+    successThreshold: 1,
+    timeout: 10000,            // Thêm timeout cho query
+    logger: logger
+  }
+);
+
+module.exports = { CircuitBreaker, historyCircuitBreaker };

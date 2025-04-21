@@ -64,23 +64,34 @@ GoldPriceSchema.statics.getLatestByKey = async function (keyID) {
 };
 
 // Phương thức tĩnh để lấy lịch sử giá theo keyID và khoảng thời gian
-GoldPriceSchema.statics.getHistoryByKey = async function (keyID, fromDate, toDate, limit) {
+GoldPriceSchema.statics.getHistoryByKey = async function (keyID, fromDate, toDate, page = 1, limit = 20) {
   try {
     return await dbCircuitBreaker.exec(
-      async (key, from, to, lim) => {
+      async (key, from, to, pg, lim) => {
         const query = { keyID: key };
         if (from || to) {
           query.timestamp = {};
           if (from) query.timestamp.$gte = from;
           if (to) query.timestamp.$lte = to;
         }
-
-        return this.find(query)
+        
+        const skip = (pg - 1) * lim;
+        
+        return this.find(query, { 
+          keyID: 1, 
+          'products.type': 1, 
+          'products.sellPrice': 1, 
+          'products.buyPrice': 1, 
+          timestamp: 1,
+          _id: 0 // Loại bỏ _id để giảm kích thước dữ liệu
+        })
           .sort({ timestamp: -1 })
+          .skip(skip)
           .limit(lim)
+          .lean() // Tối ưu hóa bằng cách trả về plain JavaScript objects
           .exec();
       },
-      keyID, fromDate, toDate, limit
+      keyID, fromDate, toDate, page, limit
     );
   } catch (error) {
     logger.error(`DB query error in getHistoryByKey: ${error.message}`);
