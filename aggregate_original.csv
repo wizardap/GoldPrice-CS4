@@ -1,5 +1,0 @@
-Label,# Samples,Average,Median,90% Line,95% Line,99% Line,Min,Max,Error %,Throughput,Received KB/sec,Sent KB/sec
-Gold Price API Test:GET Gold Price,30000,773,23,143,5365,16019,0,20183,0.173%,1014.67902,243.18,122.27
-Gold Price API Test:View Gold Price Page,30000,39,26,79,103,239,0,2394,0.000%,1009.86300,1227.81,124.86
-Gold Price API Test:Add Gold Price,3000,29,21,63,83,169,0,254,0.000%,103.98253,26.50,33.88
-TOTAL,63000,388,24,88,213,12941,0,20183,0.083%,2103.36538,1483.34,277.16

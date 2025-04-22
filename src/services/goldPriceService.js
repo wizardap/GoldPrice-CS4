@@ -48,17 +48,17 @@ class GoldPriceService {
       // Connect to database
       await this.sequelize.authenticate();
       console.log('Database connection established.');
-      
+
       // Sync models with database
       await this.sequelize.sync();
       console.log('Database models synchronized.');
-      
+
       // Initialize cache service
       await cacheService.connect();
-      
+
       // Initialize Kafka producer
       await kafkaService.connectProducer();
-      
+
       this.initialized = true;
     } catch (error) {
       console.error('Failed to initialize GoldPriceService:', error);
@@ -73,47 +73,44 @@ class GoldPriceService {
         throw new Error('Invalid gold price data');
       }
 
-      // 1. Sửa đổi: Thực hiện song song các thao tác
-      const [dbOperation, cacheOperation] = await Promise.all([
-        // Database operation - hàm này trả về Promise
-        (async () => {
-          const goldPriceData = {
-            type,
-            buy: priceData.buy,
-            sell: priceData.sell,
-            unit: priceData.unit || 'VND/lượng',
-            timestamp: priceData.updated_at ? new Date(priceData.updated_at) : new Date()
-          };
+      // Tạo object chung chứa thông tin gold price
+      const timestamp = priceData.updated_at ? new Date(priceData.updated_at) : new Date();
+      const unit = priceData.unit || 'VND/lượng';
 
-          // Sử dụng upsert thay vì findOrCreate
-          return this.GoldPrice.upsert(goldPriceData);
-        })(),
-        
-        // Cache operation
-        cacheService.set(type, {
-          buy: priceData.buy,
-          sell: priceData.sell,
-          unit: priceData.unit || 'VND/lượng',
-          updated_at: priceData.updated_at || new Date().toISOString()
-        })
-      ]);
-      
-      // Kafka operation không blocking request
-      kafkaService.publishGoldPriceUpdate({
+      // Tạo common data object
+      const goldPriceCommon = {
         type,
         buy: priceData.buy,
         sell: priceData.sell,
-        unit: priceData.unit || 'VND/lượng',
-        timestamp: priceData.updated_at || new Date().toISOString()
+        unit
+      };
+
+      // Object cho database
+      const goldPriceData = {
+        ...goldPriceCommon,
+        timestamp
+      };
+
+      // Object cho cache và Kafka
+      const goldPriceDto = {
+        ...goldPriceCommon,
+        updated_at: timestamp.toISOString()
+      };
+
+      // Chỉ đợi database operation hoàn thành - đây là thao tác quan trọng nhất
+      await this.GoldPrice.upsert(goldPriceData);
+
+      // Fire and forget: cache operation và kafka operation (không chặn response)
+      cacheService.set(type, goldPriceDto)
+        .catch(err => console.error('Cache update error:', err));
+
+      kafkaService.publishGoldPriceUpdate({
+        ...goldPriceDto,
+        timestamp: goldPriceDto.updated_at  // Kafka sử dụng tên trường là timestamp
       }).catch(err => console.error('Kafka publish error:', err));
 
-      return {
-        type,
-        buy: priceData.buy,
-        sell: priceData.sell,
-        unit: priceData.unit || 'VND/lượng',
-        updated_at: priceData.updated_at || new Date().toISOString()
-      };
+      // Trả về data cho client
+      return goldPriceDto;
     } catch (error) {
       console.error(`Error updating gold price for ${type}:`, error);
       throw error;
@@ -151,55 +148,6 @@ class GoldPriceService {
       return result;
     } catch (error) {
       console.error(`Error getting latest gold price for ${type}:`, error);
-      throw error;
-    }
-  }
-
-  async getGoldPriceHistory(type, startTime, endTime, limit = 100) {
-    try {
-      const query = { where: { type } };
-      
-      if (startTime && endTime) {
-        query.where.timestamp = {
-          [Sequelize.Op.between]: [new Date(startTime), new Date(endTime)]
-        };
-      } else if (startTime) {
-        query.where.timestamp = {
-          [Sequelize.Op.gte]: new Date(startTime)
-        };
-      } else if (endTime) {
-        query.where.timestamp = {
-          [Sequelize.Op.lte]: new Date(endTime)
-        };
-      }
-
-      query.order = [['timestamp', 'DESC']];
-      query.limit = limit;
-
-      const prices = await this.GoldPrice.findAll(query);
-
-      return prices.map(price => ({
-        type: price.type,
-        buy: price.buy,
-        sell: price.sell,
-        unit: price.unit,
-        updated_at: price.timestamp.toISOString()
-      }));
-    } catch (error) {
-      console.error(`Error getting gold price history for ${type}:`, error);
-      throw error;
-    }
-  }
-
-  async getAllGoldTypes() {
-    try {
-      const types = await this.GoldPrice.findAll({
-        attributes: [[Sequelize.fn('DISTINCT', Sequelize.col('type')), 'type']]
-      });
-      
-      return types.map(t => t.type);
-    } catch (error) {
-      console.error('Error getting all gold types:', error);
       throw error;
     }
   }

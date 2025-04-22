@@ -20,7 +20,10 @@
     "sequelize": "^6.32.1",
     "pg": "^8.11.1",
     "pg-hstore": "^2.3.4",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "express-rate-limit": "^6.7.0",
+    "express-validator": "^7.0.1",
+    "opossum": "^7.1.0"
   },
   "devDependencies": {
     "nodemon": "^2.0.22"

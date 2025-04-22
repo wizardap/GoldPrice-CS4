@@ -9,8 +9,6 @@ require('dotenv').config();
 const apiRoutes = require('./src/routes/api');
 const goldPriceService = require('./src/services/goldPriceService');
 const SocketHandler = require('./src/websocket/socketHandler');
-const cacheService = require('./src/services/cacheService');
-const kafkaService = require('./src/services/kafkaService');
 
 // Initialize Express app
 const app = express();
@@ -37,15 +35,15 @@ async function initApp() {
   try {
     // Initialize gold price service (database, cache, kafka)
     await goldPriceService.init();
-    
+
     // Initialize Socket.IO
     await socketHandler.init();
-    
+
     // Start the server
     server.listen(port, () => {
       console.log(`Gold Price Monitoring server running on port ${port}`);
     });
-    
+
     // Handle graceful shutdown
     process.on('SIGINT', async () => {
       console.log('Shutting down server...');
@@ -58,30 +56,20 @@ async function initApp() {
   }
 }
 
-// Thêm vào phần khởi động server
-async function startServer() {
-  try {
-    // Kết nối Redis
-    await cacheService.connect();
-    
-    // Khởi tạo Kafka với nhiều partitions
-    await kafkaService.init();
-    
-    // Khởi tạo dịch vụ giá vàng
-    await goldPriceService.init();
-    
-    // Khởi tạo socket handler
-    await socketHandler.init();
-    
-    // Khởi động server
-    server.listen(port, () => {
-      console.log(`Gold Price Monitoring server running on port ${port}`);
-    });
-  } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
-  }
-}
+// Thêm xử lý lỗi không bắt được
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  // Ghi log lỗi
+  // Chờ 3 giây để log được ghi xong
+  setTimeout(() => {
+    process.exit(1); // Docker/Kubernetes sẽ tự động khởi động lại container
+  }, 3000);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Không exit process, chỉ log lỗi
+});
 
 // Start the application
 initApp();

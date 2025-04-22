@@ -7,8 +7,13 @@ class SocketHandler {
   constructor(server) {
     this.io = socketIo(server, {
       cors: {
-        origin: '*',
-        methods: ['GET', 'POST']
+        origin: [
+          'http://localhost:8080',
+          'http://127.0.0.1:8080',
+          process.env.FRONTEND_URL || 'https://yourdomain.com'
+        ],
+        methods: ['GET', 'POST'],
+        credentials: true
       }
     });
     this.initialized = false;
@@ -20,14 +25,14 @@ class SocketHandler {
     try {
       this.io.on('connection', async (socket) => {
         console.log('Client connected:', socket.id);
-        
+
         // Handle subscription to gold price updates
         socket.on('subscribe', async (goldType) => {
           console.log(`Client ${socket.id} subscribed to ${goldType}`);
-          
+
           // Join room for this gold type
           socket.join(goldType);
-          
+
           // Send the latest price immediately
           try {
             const latestPrice = await goldPriceService.getLatestGoldPrice(goldType);
@@ -41,19 +46,19 @@ class SocketHandler {
             console.error(`Error sending initial gold price for ${goldType}:`, error);
           }
         });
-        
+
         // Handle unsubscribe
         socket.on('unsubscribe', (goldType) => {
           console.log(`Client ${socket.id} unsubscribed from ${goldType}`);
           socket.leave(goldType);
         });
-        
+
         // Handle disconnect
         socket.on('disconnect', () => {
           console.log('Client disconnected:', socket.id);
         });
       });
-      
+
       // Subscribe to Kafka for gold price updates
       await kafkaService.subscribeToGoldPriceUpdates('socket-io-group', (goldPriceData) => {
         const goldType = goldPriceData.type;
@@ -65,11 +70,11 @@ class SocketHandler {
             updated_at: goldPriceData.timestamp
           }
         };
-        
+
         // Broadcast to all clients subscribed to this gold type
         this.io.to(goldType).emit('goldPriceUpdate', data);
       });
-      
+
       this.initialized = true;
       console.log('WebSocket handler initialized');
     } catch (error) {
