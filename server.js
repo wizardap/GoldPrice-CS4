@@ -56,16 +56,6 @@ async function initApp() {
   }
 }
 
-// Thêm xử lý lỗi không bắt được
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
-  // Ghi log lỗi
-  // Chờ 3 giây để log được ghi xong
-  setTimeout(() => {
-    process.exit(1); // Docker/Kubernetes sẽ tự động khởi động lại container
-  }, 3000);
-});
-
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
   // Không exit process, chỉ log lỗi
