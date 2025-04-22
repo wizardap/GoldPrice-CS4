@@ -6,10 +6,10 @@ const { apiLimiter, writeLimiter } = require('../middleware/rateLimiter');
 const { validateGoldPriceUpdate, validateGoldTypeParam } = require('../middleware/validator');
 
 // Add or update gold price - với rate limiting và validation
-router.post('/add', validateGoldPriceUpdate, goldPriceController.updateGoldPrice);
+router.post('/add', writeLimiter, validateGoldPriceUpdate, goldPriceController.updateGoldPrice);
 
 // Get gold price by type - với rate limiting và validation
-router.get('/get/:id', validateGoldTypeParam, goldPriceController.getGoldPrice);
+router.get('/get/:id', apiLimiter, validateGoldTypeParam, goldPriceController.getGoldPrice);
 
 // Thêm health check endpoint vào API routes
 router.get('/health', (req, res) => {
