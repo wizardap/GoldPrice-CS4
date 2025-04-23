@@ -19,7 +19,8 @@ Dự án này là phiên bản nâng cấp của một chương trình đơn gi�
 
 Hệ thống được xây dựng theo mô hình kiến trúc phân lớp kết hợp với kiến trúc hướng sự kiện với các thành phần sau:
 
-![Kiến trúc hệ thống](https://github.com/user-attachments/assets/78f9c9ea-62a0-4e45-90b2-71d217884057)
+![image](https://github.com/user-attachments/assets/78f9c9ea-62a0-4e45-90b2-71d217884057)
+
 
 ### Các thành phần chính
 
