@@ -19,7 +19,7 @@ Dự án này là phiên bản nâng cấp của một chương trình đơn gi�
 
 Hệ thống được xây dựng theo mô hình kiến trúc phân lớp kết hợp với kiến trúc hướng sự kiện với các thành phần sau:
 
-![Kiến trúc hệ thống](docs\architecture.png)
+![Kiến trúc hệ thống](https://github.com/user-attachments/assets/78f9c9ea-62a0-4e45-90b2-71d217884057)
 
 ### Các thành phần chính
 
@@ -47,7 +47,7 @@ Hệ thống được xây dựng theo mô hình kiến trúc phân lớp kết 
 $ git clone  https://github.com/wizardap/GoldPrice-CS4.git
 
 # Di chuyển vào thư mục dự án
-$ cd gold-price-monitoring
+$ cd GoldPrice-CS4
 
 # Tạo file .env từ .env.example
 $ cp .env.example .env
@@ -60,10 +60,10 @@ $ docker-compose up -d
 
 ```sh
 # Clone repository
-$ git clone https://github.com/yourusername/gold-price-monitoring.git
+$ git clone https://github.com/wizardap/GoldPrice-CS4.git
 
 # Di chuyển vào thư mục dự án
-$ cd gold-price-monitoring
+$ cd GoldPrice-CS4
 
 # Cài đặt các gói phụ thuộc
 $ npm install
